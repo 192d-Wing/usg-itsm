@@ -1,0 +1,85 @@
+// Command ticketing is the work-item service: incidents and service requests,
+// their comments, and an append-only history (ADR-0008). It owns the
+// `ticketing` schema and validates OIDC bearer tokens independently of the
+// gateway (defense in depth).
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"time"
+
+	"github.com/192d-Wing/usg-itsm/pkg/auth"
+	"github.com/192d-Wing/usg-itsm/pkg/config"
+	"github.com/192d-Wing/usg-itsm/pkg/db"
+	"github.com/192d-Wing/usg-itsm/pkg/httpx"
+	"github.com/192d-Wing/usg-itsm/pkg/log"
+	"github.com/192d-Wing/usg-itsm/pkg/server"
+	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/api"
+	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/store"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
+)
+
+func main() {
+	cfg := config.Load("ticketing", ":8445")
+	logger := log.New(cfg.ServiceName, cfg.LogLevel)
+
+	if err := run(cfg, logger); err != nil {
+		logger.Error("ticketing exited with error", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run(cfg config.Config, logger *slog.Logger) error {
+	if cfg.DatabaseURL == "" {
+		return errors.New("DATABASE_URL is required")
+	}
+	if !cfg.AuthEnabled() {
+		return errors.New("OIDC_ISSUER is required")
+	}
+
+	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := db.Connect(startupCtx, cfg.DatabaseURL, cfg.DatabaseSchema)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := db.Migrate(startupCtx, pool, cfg.DatabaseSchema, store.Migrations, store.MigrationsDir); err != nil {
+		return err
+	}
+	logger.Info("migrations applied", "schema", cfg.DatabaseSchema)
+
+	verifier, err := auth.NewOIDCVerifier(startupCtx, cfg.OIDCIssuer, cfg.OIDCAudience, cfg.RolesClaim)
+	if err != nil {
+		return err
+	}
+
+	handlers := api.New(store.New(pool))
+
+	app := fiber.New(fiber.Config{
+		AppName:               "usg-itsm-ticketing",
+		DisableStartupMessage: true,
+		ErrorHandler:          httpx.DefaultErrorHandler,
+	})
+	app.Use(requestid.New())
+	app.Use(recover.New())
+
+	httpx.Health(app, func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		return pool.Ping(ctx)
+	})
+
+	v1 := app.Group("/api/v1", auth.RequireAuth(verifier))
+	handlers.Register(v1)
+	logger.Info("ticketing API mounted", "issuer", cfg.OIDCIssuer)
+
+	return server.Run(cfg, app, logger)
+}

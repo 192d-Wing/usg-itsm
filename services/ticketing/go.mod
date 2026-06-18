@@ -1,15 +1,16 @@
-module github.com/192d-Wing/usg-itsm/pkg
+module github.com/192d-Wing/usg-itsm/services/ticketing
 
 go 1.25.0
 
 require (
-	github.com/coreos/go-oidc/v3 v3.19.0
+	github.com/192d-Wing/usg-itsm/pkg v0.0.0
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/jackc/pgx/v5 v5.10.0
 )
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/coreos/go-oidc/v3 v3.19.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -28,3 +29,5 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )
+
+replace github.com/192d-Wing/usg-itsm/pkg => ../../pkg

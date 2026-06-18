@@ -3,7 +3,7 @@
 
 SHELL        := /bin/sh
 COMPOSE      := docker compose -f compose/docker-compose.yml
-GO_MODULES   := pkg services/gateway services/identity
+GO_MODULES   := pkg services/gateway services/identity services/ticketing
 
 .PHONY: help
 help: ## Show this help
@@ -54,3 +54,7 @@ run-gateway: ## Run the gateway service locally
 .PHONY: run-identity
 run-identity: ## Run the identity service locally
 	cd services/identity && go run ./cmd/identity
+
+.PHONY: run-ticketing
+run-ticketing: ## Run the ticketing service locally (needs DATABASE_URL + OIDC_ISSUER)
+	cd services/ticketing && go run ./cmd/ticketing

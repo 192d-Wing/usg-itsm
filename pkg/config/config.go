@@ -38,6 +38,12 @@ type Config struct {
 	// top-level array claim and Keycloak's realm_access.roles.
 	RolesClaim string
 
+	// DatabaseURL is the PostgreSQL connection string (empty if the service is
+	// stateless). DatabaseSchema scopes the connection's search_path so each
+	// service owns its schema (ADR-0002).
+	DatabaseURL    string
+	DatabaseSchema string
+
 	// ShutdownTimeout bounds graceful shutdown.
 	ShutdownTimeout time.Duration
 }
@@ -55,6 +61,8 @@ func Load(service, defaultAddr string) Config {
 		OIDCIssuer:      env("OIDC_ISSUER", ""),
 		OIDCAudience:    env("OIDC_AUDIENCE", ""),
 		RolesClaim:      env("OIDC_ROLES_CLAIM", "roles"),
+		DatabaseURL:     env("DATABASE_URL", ""),
+		DatabaseSchema:  env("DATABASE_SCHEMA", service),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}
 }
