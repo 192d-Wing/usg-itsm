@@ -1,0 +1,41 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+go.work.sum
+
+# Node / web
+node_modules/
+web/dist/
+web/.vite/
+*.local
+
+# Env & secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+!**/testdata/**/*.crt
+!**/testdata/**/*.key
+
+# Local data volumes
+/.data/
+/compose/.data/
+
+# Editor / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Logs & coverage
+*.log
+coverage.*

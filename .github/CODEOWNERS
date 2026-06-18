@@ -1,0 +1,25 @@
+# Code ownership — every PR requires review from the relevant owners.
+# Replace the placeholder team handles with real GitHub teams/users.
+
+# Default owners for everything in the repo.
+*                       @192d-Wing/itsm-maintainers
+
+# Shared libraries — high blast radius, require platform review.
+/pkg/                   @192d-Wing/itsm-platform
+
+# Service boundaries.
+/services/gateway/      @192d-Wing/itsm-platform
+/services/ticketing/    @192d-Wing/itsm-backend
+/services/catalog/      @192d-Wing/itsm-backend
+/services/workflow-sla/ @192d-Wing/itsm-backend
+/services/notification/ @192d-Wing/itsm-backend
+/services/audit/        @192d-Wing/itsm-security
+/services/identity/     @192d-Wing/itsm-security
+
+# Frontend.
+/web/                   @192d-Wing/itsm-frontend
+
+# Deployment, CI, and security-sensitive config.
+/deploy/                @192d-Wing/itsm-platform
+/.github/               @192d-Wing/itsm-platform
+/docs/adr/              @192d-Wing/itsm-maintainers
