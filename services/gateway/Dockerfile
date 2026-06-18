@@ -1,23 +1,19 @@
 # Build from the repository root:
 #   docker build -f services/gateway/Dockerfile -t usg-itsm/gateway .
 #
-# Multi-stage: a static Go binary on a distroless non-root base.
+# Multi-stage: a static Go binary on a distroless non-root base. The service
+# module's `replace` directive points at ../../pkg, so only pkg + this service
+# are needed in the build context (no go.work required).
 # Pin digests in production for air-gapped reproducibility.
 
 FROM golang:1.25 AS build
 WORKDIR /src
-
-# Copy the workspace and modules needed by the gateway (it depends on /pkg).
-COPY go.work ./
 COPY pkg/ ./pkg/
 COPY services/gateway/ ./services/gateway/
 
-# Drop the identity module from the workspace so this image builds standalone.
-RUN go work edit -dropuse ./services/identity
-
+WORKDIR /src/services/gateway
 ENV CGO_ENABLED=0
-RUN go build -trimpath -ldflags="-s -w" \
-    -o /out/gateway ./services/gateway/cmd/gateway
+RUN go build -trimpath -ldflags="-s -w" -o /out/gateway ./cmd/gateway
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /

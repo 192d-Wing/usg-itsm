@@ -64,6 +64,14 @@ func TestRequireAuth_ValidToken(t *testing.T) {
 	}
 }
 
+func TestRequireAuth_LowercaseScheme(t *testing.T) {
+	app := newApp(fakeVerifier{claims: &Claims{Subject: "u1"}})
+	// RFC 7235: the auth scheme is case-insensitive.
+	if got := do(t, app, "/me", "bearer good"); got != fiber.StatusOK {
+		t.Fatalf("want 200 for lowercase scheme, got %d", got)
+	}
+}
+
 func TestRequireRole_Forbidden(t *testing.T) {
 	app := newApp(fakeVerifier{claims: &Claims{Subject: "u1", Roles: []string{"agent"}}})
 	if got := do(t, app, "/admin", "Bearer good"); got != fiber.StatusForbidden {

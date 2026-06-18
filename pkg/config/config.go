@@ -43,10 +43,11 @@ type Config struct {
 }
 
 // Load builds a Config for the named service from environment variables.
-func Load(service string) Config {
+// defaultAddr is the service's listen address when ADDR is not set.
+func Load(service, defaultAddr string) Config {
 	return Config{
 		ServiceName:     service,
-		Addr:            env("ADDR", ":8443"),
+		Addr:            env("ADDR", defaultAddr),
 		Environment:     env("ENVIRONMENT", "dev"),
 		LogLevel:        env("LOG_LEVEL", "info"),
 		TLSCertFile:     env("TLS_CERT_FILE", ""),

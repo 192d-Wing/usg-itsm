@@ -7,6 +7,8 @@ package auth
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/gofiber/fiber/v2"
@@ -25,12 +27,7 @@ type Claims struct {
 
 // HasRole reports whether the subject holds the named role.
 func (c *Claims) HasRole(role string) bool {
-	for _, r := range c.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.Roles, role)
 }
 
 // Verifier validates a raw bearer token and returns normalized claims.
@@ -84,12 +81,12 @@ func From(c *fiber.Ctx) *Claims {
 }
 
 // bearerToken extracts the token from an "Authorization: Bearer <token>"
-// header.
+// header. Per RFC 7235 the auth scheme is matched case-insensitively.
 func bearerToken(c *fiber.Ctx) string {
-	const prefix = "Bearer "
+	const prefix = "bearer "
 	h := c.Get(fiber.HeaderAuthorization)
-	if len(h) > len(prefix) && h[:len(prefix)] == prefix {
-		return h[len(prefix):]
+	if len(h) > len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
+		return strings.TrimSpace(h[len(prefix):])
 	}
 	return ""
 }

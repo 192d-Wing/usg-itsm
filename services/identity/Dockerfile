@@ -1,18 +1,17 @@
 # Build from the repository root:
 #   docker build -f services/identity/Dockerfile -t usg-itsm/identity .
+#
+# The service module's `replace` directive points at ../../pkg, so only pkg +
+# this service are needed in the build context (no go.work required).
 
 FROM golang:1.25 AS build
 WORKDIR /src
-
-COPY go.work ./
 COPY pkg/ ./pkg/
 COPY services/identity/ ./services/identity/
 
-RUN go work edit -dropuse ./services/gateway
-
+WORKDIR /src/services/identity
 ENV CGO_ENABLED=0
-RUN go build -trimpath -ldflags="-s -w" \
-    -o /out/identity ./services/identity/cmd/identity
+RUN go build -trimpath -ldflags="-s -w" -o /out/identity ./cmd/identity
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
