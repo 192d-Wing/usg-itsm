@@ -13,6 +13,7 @@ import (
 	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/domain"
 	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 // Roles that grant agent-level access.
@@ -56,12 +57,25 @@ func New(st WorkItemStore) *API {
 func (a *API) Register(r fiber.Router) {
 	r.Post("/tickets", a.create)
 	r.Get("/tickets", a.list)
-	r.Get("/tickets/:id", a.get)
-	r.Patch("/tickets/:id", a.update)
-	r.Post("/tickets/:id/transition", a.transition)
-	r.Get("/tickets/:id/comments", a.listComments)
-	r.Post("/tickets/:id/comments", a.addComment)
-	r.Get("/tickets/:id/events", a.listEvents)
+
+	// Routes with an :id are guarded by requireValidID so a malformed id is a
+	// clean 404 rather than a database type error (500).
+	item := r.Group("/tickets/:id", requireValidID)
+	item.Get("", a.get)
+	item.Patch("", a.update)
+	item.Post("/transition", a.transition)
+	item.Get("/comments", a.listComments)
+	item.Post("/comments", a.addComment)
+	item.Get("/events", a.listEvents)
+}
+
+// requireValidID rejects a non-UUID :id with 404, masking existence and
+// keeping malformed input from reaching the store as a type error.
+func requireValidID(c *fiber.Ctx) error {
+	if uuid.Validate(c.Params("id")) != nil {
+		return httpx.WriteError(c, fiber.StatusNotFound, "not_found", msgNotFound)
+	}
+	return c.Next()
 }
 
 func isAgent(c *auth.Claims) bool {

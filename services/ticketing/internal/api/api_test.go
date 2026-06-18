@@ -149,7 +149,7 @@ func TestGet_RequesterCannotSeeOthers(t *testing.T) {
 	// Item belongs to someone else; requester must get 404.
 	fs := &fakeStore{item: domain.WorkItem{ID: "1", RequesterID: "other"}}
 	app := newApp(requester(), fs)
-	if got := do(t, app, fiber.MethodGet, "/api/v1/tickets/1", ""); got != fiber.StatusNotFound {
+	if got := do(t, app, fiber.MethodGet, "/api/v1/tickets/11111111-1111-1111-1111-111111111111", ""); got != fiber.StatusNotFound {
 		t.Fatalf("want 404, got %d", got)
 	}
 }
@@ -157,7 +157,7 @@ func TestGet_RequesterCannotSeeOthers(t *testing.T) {
 func TestTransition_RequesterForbidden(t *testing.T) {
 	app := newApp(requester(), &fakeStore{})
 	body := `{"status":"in_progress"}`
-	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/1/transition", body); got != fiber.StatusForbidden {
+	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/11111111-1111-1111-1111-111111111111/transition", body); got != fiber.StatusForbidden {
 		t.Fatalf("want 403, got %d", got)
 	}
 }
@@ -166,8 +166,15 @@ func TestTransition_InvalidIsConflict(t *testing.T) {
 	fs := &fakeStore{transErr: store.ErrInvalidTransition}
 	app := newApp(agent(), fs)
 	body := `{"status":"closed"}`
-	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/1/transition", body); got != fiber.StatusConflict {
+	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/11111111-1111-1111-1111-111111111111/transition", body); got != fiber.StatusConflict {
 		t.Fatalf("want 409, got %d", got)
+	}
+}
+
+func TestGet_InvalidIDIsNotFound(t *testing.T) {
+	app := newApp(agent(), &fakeStore{})
+	if got := do(t, app, fiber.MethodGet, "/api/v1/tickets/not-a-uuid", ""); got != fiber.StatusNotFound {
+		t.Fatalf("want 404 for malformed id, got %d", got)
 	}
 }
 
@@ -175,7 +182,7 @@ func TestComment_InternalRequiresAgent(t *testing.T) {
 	fs := &fakeStore{item: domain.WorkItem{ID: "1", RequesterID: "user-1"}}
 	app := newApp(requester(), fs)
 	body := `{"body":"secret","internal":true}`
-	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/1/comments", body); got != fiber.StatusForbidden {
+	if got := do(t, app, fiber.MethodPost, "/api/v1/tickets/11111111-1111-1111-1111-111111111111/comments", body); got != fiber.StatusForbidden {
 		t.Fatalf("want 403, got %d", got)
 	}
 }
