@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
+          cache-dependency-path: "**/go.sum"
 
       - name: gofmt check
         run: |
@@ -56,20 +56,5 @@ jobs:
             (cd "$mod" && go test ./... -race -count=1)
           done
 
-  web:
-    name: web lint / build
-    runs-on: ubuntu-latest
-    if: ${{ hashFiles('web/package.json') != '' }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-        working-directory: web
-      - run: npm run lint --if-present
-        working-directory: web
-      - run: npm run build --if-present
-        working-directory: web
+  # The web (SPA) job is added with the React app in a later phase; a job-level
+  # `if` cannot use hashFiles(), so we reintroduce it when web/ exists.
