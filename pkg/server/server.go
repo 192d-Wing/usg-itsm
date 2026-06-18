@@ -27,6 +27,8 @@ func Run(cfg config.Config, app *fiber.App, logger *slog.Logger) error {
 		return err
 	}
 
+	// A ":<port>" address binds [::] (dual-stack), which is correct on the
+	// IPv6-only cluster network (ADR-0009); IPv4 is terminated at the edge LB.
 	ln, err := tls.Listen("tcp", cfg.Addr, tlsCfg)
 	if err != nil {
 		return err

@@ -74,6 +74,10 @@ forms, catalog entry points, and SLA policy.
   NATS KV, never Olric alone.
 - **Observability**: OTel traces/metrics/logs → Prometheus + Loki + Tempo,
   visualized in Grafana.
+- **Networking** (ADR-0009): the cluster is **IPv6-only internally** on the
+  **Cilium** CNI; services bind `[::]:<port>`. IPv4 is terminated only at the
+  edge via a **load-balancer VIP**. NetworkPolicy is Cilium-flavored and
+  default-deny, complementing mTLS.
 
 ## Data ownership
 
