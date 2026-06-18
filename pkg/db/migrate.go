@@ -16,30 +16,25 @@ import (
 // table inside schema. Each migration runs in its own transaction, so a
 // failure leaves earlier migrations applied and rolls back the failing one.
 func Migrate(ctx context.Context, pool *pgxpool.Pool, schema string, fsys fs.FS, dir string) error {
-	qSchema := pgx.Identifier{schema}.Sanitize()
-	if _, err := pool.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+qSchema); err != nil {
+	migTable := pgx.Identifier{schema, "schema_migrations"}.Sanitize()
+
+	if _, err := pool.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+pgx.Identifier{schema}.Sanitize()); err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
 	if _, err := pool.Exec(ctx,
-		"CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
+		"CREATE TABLE IF NOT EXISTS "+migTable+
+			" (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
 	); err != nil {
 		return fmt.Errorf("create migrations table: %w", err)
 	}
 
-	entries, err := fs.ReadDir(fsys, dir)
+	versions, err := sqlVersions(fsys, dir)
 	if err != nil {
-		return fmt.Errorf("read migrations dir: %w", err)
+		return err
 	}
-	var versions []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
-			versions = append(versions, e.Name())
-		}
-	}
-	sort.Strings(versions)
 
 	for _, version := range versions {
-		applied, err := isApplied(ctx, pool, version)
+		applied, err := isApplied(ctx, pool, migTable, version)
 		if err != nil {
 			return err
 		}
@@ -50,17 +45,33 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, schema string, fsys fs.FS,
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", version, err)
 		}
-		if err := applyOne(ctx, pool, version, string(body)); err != nil {
+		if err := applyOne(ctx, pool, migTable, version, string(body)); err != nil {
 			return fmt.Errorf("apply migration %s: %w", version, err)
 		}
 	}
 	return nil
 }
 
-func isApplied(ctx context.Context, pool *pgxpool.Pool, version string) (bool, error) {
+// sqlVersions returns the sorted .sql file names in dir of fsys.
+func sqlVersions(fsys fs.FS, dir string) ([]string, error) {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return nil, fmt.Errorf("read migrations dir: %w", err)
+	}
+	var versions []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			versions = append(versions, e.Name())
+		}
+	}
+	sort.Strings(versions)
+	return versions, nil
+}
+
+func isApplied(ctx context.Context, pool *pgxpool.Pool, migTable, version string) (bool, error) {
 	var exists bool
 	err := pool.QueryRow(ctx,
-		"SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)", version,
+		"SELECT EXISTS (SELECT 1 FROM "+migTable+" WHERE version = $1)", version,
 	).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check migration %s: %w", version, err)
@@ -68,18 +79,24 @@ func isApplied(ctx context.Context, pool *pgxpool.Pool, version string) (bool, e
 	return exists, nil
 }
 
-func applyOne(ctx context.Context, pool *pgxpool.Pool, version, body string) error {
-	tx, err := pool.Begin(ctx)
+// applyOne runs a migration body and records its version atomically. The body
+// is executed via the simple query protocol (PgConn().Exec), which — unlike
+// pgx's default extended protocol — supports multiple statements in a single
+// SQL string. The whole thing is wrapped in BEGIN/COMMIT so a failure rolls
+// back, including the version insert.
+func applyOne(ctx context.Context, pool *pgxpool.Pool, migTable, version, body string) error {
+	conn, err := pool.Acquire(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer conn.Release()
 
-	if _, err := tx.Exec(ctx, body); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	// version is an embedded migration file name (trusted), but double any
+	// quote defensively before inlining it into the simple-protocol batch.
+	safeVersion := strings.ReplaceAll(version, "'", "''")
+	batch := "BEGIN;\n" + body +
+		"\nINSERT INTO " + migTable + " (version) VALUES ('" + safeVersion + "');\nCOMMIT;"
+
+	_, err = conn.Conn().PgConn().Exec(ctx, batch).ReadAll()
+	return err
 }
