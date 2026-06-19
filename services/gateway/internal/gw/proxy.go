@@ -3,6 +3,7 @@ package gw
 
 import (
 	"crypto/tls"
+	"net/url"
 	"strings"
 	"time"
 
@@ -34,7 +35,16 @@ func Proxy(upstream string, client *fasthttp.Client, timeout time.Duration) fibe
 	if timeout <= 0 {
 		timeout = DefaultUpstreamTimeout
 	}
+	// Derive the upstream host so the forwarded Host header matches the cert /
+	// SNI in verify mode (rather than leaking the gateway's inbound Host).
+	var host string
+	if u, err := url.Parse(upstream); err == nil {
+		host = u.Host
+	}
 	return func(c *fiber.Ctx) error {
+		if host != "" {
+			c.Request().Header.SetHost(host)
+		}
 		// fiber's proxy.Do replaces the request URI entirely, so append the
 		// original path+query to the upstream base.
 		if err := proxy.DoTimeout(c, base+c.OriginalURL(), timeout, client); err != nil {

@@ -1,10 +1,10 @@
 package gw_test
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -59,16 +59,19 @@ func startBackend(t *testing.T) string {
 
 func waitReachable(t *testing.T, addr string) {
 	t.Helper()
+	dialer := &tls.Dialer{Config: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13}} //nolint:gosec // test
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		cancel()
 		if err == nil {
 			_ = conn.Close()
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("backend %s not reachable", addr)
+	t.Fatalf("backend %s not reachable over TLS", addr)
 }
 
 func frontApp(upstream string) *fiber.App {

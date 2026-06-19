@@ -6,7 +6,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"time"
 
@@ -74,6 +77,17 @@ func mountUpstreams(r fiber.Router, cfg config.Config, logger *slog.Logger) erro
 		logger.Warn("TICKETING_URL not set; ticket routing disabled")
 		return nil
 	}
+	if u, err := url.Parse(cfg.TicketingURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid TICKETING_URL %q: must be an http(s) URL", cfg.TicketingURL)
+	}
+	// Internal certs are issued by the cluster CA (cert-manager), which is not
+	// in the system trust store; require it outside dev so a missing CA fails
+	// fast instead of surfacing as opaque 502s.
+	if !cfg.IsDev() && cfg.InternalCAFile == "" {
+		return errors.New("INTERNAL_CA_FILE is required outside dev for internal TLS verification")
+	}
+
 	clientTLS, err := tlsconf.Client(cfg.InternalCAFile, cfg.IsDev())
 	if err != nil {
 		return err
@@ -82,7 +96,7 @@ func mountUpstreams(r fiber.Router, cfg config.Config, logger *slog.Logger) erro
 	r.All("/tickets", h)
 	r.All("/tickets/*", h)
 	logger.Info("routing /api/v1/tickets -> ticketing",
-		"upstream", cfg.TicketingURL, "tls_verify", cfg.InternalCAFile != "" || !cfg.IsDev())
+		"upstream", cfg.TicketingURL, "insecure_skip_verify", cfg.InternalCAFile == "" && cfg.IsDev())
 	return nil
 }
 
