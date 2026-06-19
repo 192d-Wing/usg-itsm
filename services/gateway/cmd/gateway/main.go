@@ -68,6 +68,13 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		logger.Warn("OIDC issuer not set; protected API routes are disabled (dev only)")
 	}
 
+	// Serve the built SPA (with history-API fallback) when configured. Mounted
+	// last so it never shadows the API or health routes.
+	if cfg.WebDir != "" {
+		app.Use(gw.WebUI(cfg.WebDir))
+		logger.Info("serving SPA", "dir", cfg.WebDir)
+	}
+
 	return server.Run(cfg, app, logger)
 }
 

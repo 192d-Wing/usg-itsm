@@ -19,6 +19,12 @@ SPA.
 | `GET /healthz`, `/readyz` | gateway (public)                |
 | `GET /api/v1/me`          | gateway (returns caller claims) |
 | `/api/v1/tickets[/*]`     | ticketing (`TICKETING_URL`)     |
+| everything else           | SPA static assets (`WEB_DIR`)   |
+
+When `WEB_DIR` is set the gateway serves the built SPA with history-API
+fallback (unknown paths return `index.html`), so the browser talks to a single
+origin for both the UI and the API. In dev, leave `WEB_DIR` empty and run the
+SPA on the Vite dev server (which proxies `/api` back to the gateway).
 
 ## Configuration
 
@@ -29,4 +35,5 @@ SPA.
 | `OIDC_AUDIENCE`    | Expected `aud`                                               |
 | `TICKETING_URL`    | Ticketing upstream, e.g. `https://ticketing:8445`; empty disables |
 | `INTERNAL_CA_FILE` | PEM CA for internal TLS; empty in dev = skip-verify          |
+| `WEB_DIR`          | Built SPA assets dir to serve; empty disables (dev uses Vite) |
 | `TLS_CERT_FILE` / `TLS_KEY_FILE` | Server cert; empty in dev = self-signed       |
