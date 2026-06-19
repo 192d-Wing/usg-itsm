@@ -3,7 +3,7 @@
 
 SHELL        := /bin/sh
 COMPOSE      := docker compose -f compose/docker-compose.yml
-GO_MODULES   := pkg services/gateway services/identity services/ticketing
+GO_MODULES   := pkg services/gateway services/identity services/ticketing services/notification
 
 .PHONY: help
 help: ## Show this help
@@ -58,3 +58,7 @@ run-identity: ## Run the identity service locally
 .PHONY: run-ticketing
 run-ticketing: ## Run the ticketing service locally (needs DATABASE_URL + OIDC_ISSUER)
 	cd services/ticketing && go run ./cmd/ticketing
+
+.PHONY: run-notification
+run-notification: ## Run the notification service locally (needs NATS_URL)
+	cd services/notification && go run ./cmd/notification

@@ -42,14 +42,24 @@ func Connect(ctx context.Context, url, name string, subjects []string) (*NATSPub
 		nc.Close()
 		return nil, fmt.Errorf("jetstream init: %w", err)
 	}
+	if err := ensureStream(ctx, js, name, subjects); err != nil {
+		nc.Close()
+		return nil, err
+	}
+	return &NATSPublisher{nc: nc, js: js}, nil
+}
+
+// ensureStream idempotently creates/updates a JetStream stream. Publisher and
+// consumers call it with the same name/subjects, so order of startup doesn't
+// matter.
+func ensureStream(ctx context.Context, js jetstream.JetStream, name string, subjects []string) error {
 	if _, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     name,
 		Subjects: subjects,
 	}); err != nil {
-		nc.Close()
-		return nil, fmt.Errorf("ensure stream %q: %w", name, err)
+		return fmt.Errorf("ensure stream %q: %w", name, err)
 	}
-	return &NATSPublisher{nc: nc, js: js}, nil
+	return nil
 }
 
 // Publish queues data to subject without blocking on the JetStream ack
@@ -71,4 +81,75 @@ func (p *NATSPublisher) Close() {
 	case <-time.After(3 * time.Second):
 	}
 	_ = p.nc.Drain()
+}
+
+// Handler processes one event. Returning an error nak's the message so
+// JetStream redelivers it (up to the consumer's MaxDeliver).
+type Handler func(subject string, data []byte) error
+
+// ConsumeConfig configures a durable consumer.
+type ConsumeConfig struct {
+	Stream     string   // stream name, e.g. "ITSM"
+	Durable    string   // durable consumer name (stable across restarts)
+	Subjects   []string // filter subjects, e.g. []string{"itsm.ticket.*"}
+	MaxDeliver int      // redelivery cap before a poison message is dropped (default 5)
+}
+
+// Consumer is a running durable JetStream subscription.
+type Consumer struct {
+	nc *nats.Conn
+	cc jetstream.ConsumeContext
+}
+
+// Consume binds a durable consumer on cfg.Stream and dispatches matching
+// messages to handler, acking on success and nak'ing on error (redelivered up
+// to MaxDeliver). The stream is ensured so the consumer can start before the
+// publisher.
+func Consume(ctx context.Context, url string, cfg ConsumeConfig, handler Handler) (*Consumer, error) {
+	if cfg.MaxDeliver <= 0 {
+		cfg.MaxDeliver = 5
+	}
+	nc, err := nats.Connect(url, nats.Name("usg-itsm"))
+	if err != nil {
+		return nil, fmt.Errorf("nats connect: %w", err)
+	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("jetstream init: %w", err)
+	}
+	if err := ensureStream(ctx, js, cfg.Stream, []string{"itsm.>"}); err != nil {
+		nc.Close()
+		return nil, err
+	}
+
+	cons, err := js.CreateOrUpdateConsumer(ctx, cfg.Stream, jetstream.ConsumerConfig{
+		Durable:        cfg.Durable,
+		FilterSubjects: cfg.Subjects,
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		MaxDeliver:     cfg.MaxDeliver,
+	})
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("consumer: %w", err)
+	}
+
+	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		if err := handler(msg.Subject(), msg.Data()); err != nil {
+			_ = msg.Nak()
+			return
+		}
+		_ = msg.Ack()
+	})
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("consume: %w", err)
+	}
+	return &Consumer{nc: nc, cc: cc}, nil
+}
+
+// Close stops consuming and drains the connection.
+func (c *Consumer) Close() {
+	c.cc.Stop()
+	_ = c.nc.Drain()
 }
