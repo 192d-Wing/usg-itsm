@@ -5,7 +5,10 @@ export function rolesFromToken(token?: string): string[] {
   const parts = token.split('.')
   if (parts.length < 2) return []
   try {
-    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+    // base64url -> base64 with padding restored (atob rejects unpadded input).
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    b64 += '='.repeat((4 - (b64.length % 4)) % 4)
+    const json = atob(b64)
     const payload = JSON.parse(json) as {
       roles?: unknown
       realm_access?: { roles?: unknown }

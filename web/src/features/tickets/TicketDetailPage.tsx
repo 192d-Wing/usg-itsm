@@ -83,7 +83,13 @@ export function TicketDetailPage() {
             </CardBody>
           </Card>
 
-          <CommentsCard id={id} agent={agent} loading={comments.isLoading} items={comments.data?.items ?? []} />
+          <CommentsCard
+            id={id}
+            agent={agent}
+            loading={comments.isLoading}
+            isError={comments.isError}
+            items={comments.data?.items ?? []}
+          />
         </div>
 
         <div className="space-y-4">
@@ -99,7 +105,15 @@ export function TicketDetailPage() {
             </CardBody>
           </Card>
 
-          {agent && <AgentActions id={id} status={t.status} assignee={t.assignee_id ?? ''} />}
+          {/* key resets local edit state when the server-side assignee changes */}
+          {agent && (
+            <AgentActions
+              key={t.assignee_id ?? 'unassigned'}
+              id={id}
+              status={t.status}
+              assignee={t.assignee_id ?? ''}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -173,6 +187,11 @@ function AgentActions({ id, status, assignee }: { id: string; status: Status; as
               Save
             </Button>
           </div>
+          {update.isError && (
+            <p className="mt-1 text-xs text-rose-700">
+              {update.error instanceof ApiError ? update.error.message : 'Assignment failed.'}
+            </p>
+          )}
         </div>
       </CardBody>
     </Card>
@@ -183,11 +202,13 @@ function CommentsCard({
   id,
   agent,
   loading,
+  isError,
   items,
 }: {
   id: string
   agent: boolean
   loading: boolean
+  isError: boolean
   items: { id: string; author_id: string; body: string; internal: boolean; created_at: string }[]
 }) {
   const add = useAddComment(id)
@@ -198,24 +219,7 @@ function CommentsCard({
     <Card>
       <CardHeader title="Activity" />
       <CardBody className="space-y-4">
-        {loading ? (
-          <Spinner />
-        ) : items.length === 0 ? (
-          <p className="text-sm text-slate-500">No comments yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {items.map((c) => (
-              <li key={c.id} className="rounded-md border border-slate-100 p-3">
-                <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">{c.author_id}</span>
-                  <span>{formatDateTime(c.created_at)}</span>
-                  {c.internal && <Badge className="bg-amber-100 text-amber-800">Internal</Badge>}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-slate-700">{c.body}</p>
-              </li>
-            ))}
-          </ul>
-        )}
+        <CommentList loading={loading} isError={isError} items={items} />
 
         <form
           className="space-y-2"
@@ -247,8 +251,41 @@ function CommentsCard({
               Comment
             </Button>
           </div>
+          {add.isError && (
+            <p className="text-xs text-rose-700">
+              {add.error instanceof ApiError ? add.error.message : 'Failed to add comment.'}
+            </p>
+          )}
         </form>
       </CardBody>
     </Card>
+  )
+}
+
+function CommentList({
+  loading,
+  isError,
+  items,
+}: {
+  loading: boolean
+  isError: boolean
+  items: { id: string; author_id: string; body: string; internal: boolean; created_at: string }[]
+}) {
+  if (loading) return <Spinner />
+  if (isError) return <p className="text-sm text-rose-700">Failed to load activity.</p>
+  if (items.length === 0) return <p className="text-sm text-slate-500">No comments yet.</p>
+  return (
+    <ul className="space-y-3">
+      {items.map((c) => (
+        <li key={c.id} className="rounded-md border border-slate-100 p-3">
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">{c.author_id}</span>
+            <span>{formatDateTime(c.created_at)}</span>
+            {c.internal && <Badge className="bg-amber-100 text-amber-800">Internal</Badge>}
+          </div>
+          <p className="whitespace-pre-wrap text-sm text-slate-700">{c.body}</p>
+        </li>
+      ))}
+    </ul>
   )
 }
