@@ -8,12 +8,9 @@ import (
 	"os"
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
-	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
 func main() {
@@ -27,15 +24,7 @@ func main() {
 }
 
 func run(cfg config.Config, logger *slog.Logger) error {
-	app := fiber.New(fiber.Config{
-		AppName:               "usg-itsm-identity",
-		DisableStartupMessage: true,
-		ErrorHandler:          httpx.DefaultErrorHandler,
-	})
-	app.Use(requestid.New())
-	app.Use(recover.New())
-
-	httpx.Health(app, nil)
+	app := server.NewApp("usg-itsm-identity", nil)
 
 	app.Get("/internal/v1/ping", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"service": cfg.ServiceName, "status": "ok"})

@@ -15,14 +15,11 @@ import (
 
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
 	"github.com/192d-Wing/usg-itsm/pkg/config"
-	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/192d-Wing/usg-itsm/pkg/tlsconf"
 	"github.com/192d-Wing/usg-itsm/services/gateway/internal/gw"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
 func main() {
@@ -36,16 +33,7 @@ func main() {
 }
 
 func run(cfg config.Config, logger *slog.Logger) error {
-	app := fiber.New(fiber.Config{
-		AppName:               "usg-itsm-gateway",
-		DisableStartupMessage: true,
-		ErrorHandler:          httpx.DefaultErrorHandler,
-	})
-
-	app.Use(requestid.New())
-	app.Use(recover.New())
-
-	httpx.Health(app, nil)
+	app := server.NewApp("usg-itsm-gateway", nil)
 
 	// Runtime SPA config: the served bundle is environment-agnostic and fetches
 	// its OIDC settings here at startup, so one image works across deployments.

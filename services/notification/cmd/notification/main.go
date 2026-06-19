@@ -12,13 +12,9 @@ import (
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
 	"github.com/192d-Wing/usg-itsm/pkg/events"
-	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/192d-Wing/usg-itsm/services/notification/internal/notify"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
 func main() {
@@ -52,15 +48,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	defer consumer.Close()
 	logger.Info("consuming ticket events", "stream", "ITSM", "durable", "notification")
 
-	app := fiber.New(fiber.Config{
-		AppName:               "usg-itsm-notification",
-		DisableStartupMessage: true,
-		ErrorHandler:          httpx.DefaultErrorHandler,
-	})
-	app.Use(requestid.New())
-	app.Use(recover.New())
-	httpx.Health(app, nil)
-
+	app := server.NewApp("usg-itsm-notification", nil)
 	return server.Run(cfg, app, logger)
 }
 
