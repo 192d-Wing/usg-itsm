@@ -6,26 +6,16 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
 	"github.com/192d-Wing/usg-itsm/pkg/events"
-	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/192d-Wing/usg-itsm/services/notification/internal/notify"
 )
 
-func main() {
-	cfg := config.Load("notification", ":8446")
-	logger := log.New(cfg.ServiceName, cfg.LogLevel)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Error("notification exited with error", "err", err)
-		os.Exit(1)
-	}
-}
+func main() { server.Bootstrap("notification", ":8446", run) }
 
 func run(cfg config.Config, logger *slog.Logger) error {
 	if cfg.NatsURL == "" {

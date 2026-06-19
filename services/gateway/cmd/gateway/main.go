@@ -10,27 +10,17 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
 	"github.com/192d-Wing/usg-itsm/pkg/config"
-	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/192d-Wing/usg-itsm/pkg/tlsconf"
 	"github.com/192d-Wing/usg-itsm/services/gateway/internal/gw"
 	"github.com/gofiber/fiber/v2"
 )
 
-func main() {
-	cfg := config.Load("gateway", ":8443")
-	logger := log.New(cfg.ServiceName, cfg.LogLevel)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Error("gateway exited with error", "err", err)
-		os.Exit(1)
-	}
-}
+func main() { server.Bootstrap("gateway", ":8443", run) }
 
 func run(cfg config.Config, logger *slog.Logger) error {
 	app := server.NewApp("usg-itsm-gateway", nil)

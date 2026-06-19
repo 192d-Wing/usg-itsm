@@ -5,23 +5,13 @@ package main
 
 import (
 	"log/slog"
-	"os"
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
-	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/gofiber/fiber/v2"
 )
 
-func main() {
-	cfg := config.Load("identity", ":8444")
-	logger := log.New(cfg.ServiceName, cfg.LogLevel)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Error("identity exited with error", "err", err)
-		os.Exit(1)
-	}
-}
+func main() { server.Bootstrap("identity", ":8444", run) }
 
 func run(cfg config.Config, logger *slog.Logger) error {
 	app := server.NewApp("usg-itsm-identity", nil)
