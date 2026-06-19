@@ -13,6 +13,7 @@ go.work.sum
 node_modules/
 web/dist/
 web/.vite/
+*.tsbuildinfo
 *.local
 
 # Env & secrets — never commit
