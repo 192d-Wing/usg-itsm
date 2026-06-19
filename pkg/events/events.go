@@ -6,6 +6,7 @@ package events
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -51,15 +52,23 @@ func Connect(ctx context.Context, url, name string, subjects []string) (*NATSPub
 	return &NATSPublisher{nc: nc, js: js}, nil
 }
 
-// Publish sends data to subject and waits for the JetStream ack.
-func (p *NATSPublisher) Publish(ctx context.Context, subject string, data []byte) error {
-	if _, err := p.js.Publish(ctx, subject, data); err != nil {
+// Publish queues data to subject without blocking on the JetStream ack
+// (PublishAsync). This keeps callers off the network hot path and decouples
+// delivery from the request context: the NATS client sends from its own
+// background goroutine and buffers across reconnects. ctx is unused here but
+// kept for the Publisher contract. Delivery is best-effort; flush on Close.
+func (p *NATSPublisher) Publish(_ context.Context, subject string, data []byte) error {
+	if _, err := p.js.PublishAsync(subject, data); err != nil {
 		return fmt.Errorf("publish %s: %w", subject, err)
 	}
 	return nil
 }
 
-// Close drains the connection, flushing buffered messages.
+// Close flushes pending async publishes (bounded) then drains the connection.
 func (p *NATSPublisher) Close() {
+	select {
+	case <-p.js.PublishAsyncComplete():
+	case <-time.After(3 * time.Second):
+	}
 	_ = p.nc.Drain()
 }

@@ -55,13 +55,21 @@ func TestNATSPublisher_Publish(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream: %v", err)
 	}
-	info, err := s.Info(ctx)
-	if err != nil {
-		t.Fatalf("info: %v", err)
-	}
-	if info.State.Msgs != 1 {
-		t.Fatalf("want 1 message in stream, got %d", info.State.Msgs)
-	}
-
 	t.Cleanup(func() { _ = js.DeleteStream(ctx, stream) })
+
+	// Publish is async (buffered), so poll until the message is stored.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		info, err := s.Info(ctx)
+		if err != nil {
+			t.Fatalf("info: %v", err)
+		}
+		if info.State.Msgs == 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("want 1 message in stream, got %d", info.State.Msgs)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
