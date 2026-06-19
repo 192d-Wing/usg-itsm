@@ -29,6 +29,7 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://itsm:itsm@localhost:5432/itsm?sslmode=disable
+      TEST_NATS_URL: nats://localhost:4222
     steps:
       - uses: actions/checkout@v6
 
@@ -36,6 +37,19 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+
+      # NATS as a `docker run` (not a service container) so JetStream (-js) can
+      # be enabled, which service containers cannot pass as an argument.
+      - name: Start NATS (JetStream)
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10-alpine -js
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/127.0.0.1/4222) 2>/dev/null; then
+              echo "NATS ready"; exec 3>&-; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::NATS did not become ready"; exit 1
 
       - name: gofmt check
         run: |

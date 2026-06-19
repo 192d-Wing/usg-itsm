@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -93,6 +94,49 @@ func TestStore_GetNotFound(t *testing.T) {
 	_, err := st.Get(context.Background(), "00000000-0000-0000-0000-000000000000")
 	if !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
+	}
+}
+
+type capturePublisher struct{ subjects []string }
+
+func (c *capturePublisher) Publish(_ context.Context, subject string, _ []byte) error {
+	c.subjects = append(c.subjects, subject)
+	return nil
+}
+
+func TestStore_PublishesEvents(t *testing.T) {
+	_, pool := newStore(t)
+	cap := &capturePublisher{}
+	st := store.New(pool, store.WithPublisher(cap))
+	ctx := context.Background()
+
+	wi, err := st.Create(ctx, store.CreateInput{
+		Type: domain.TypeIncident, Title: "x", Priority: domain.PriorityLow, RequesterID: "u",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := st.Transition(ctx, wi.ID, "agent", domain.StatusInProgress); err != nil {
+		t.Fatalf("transition: %v", err)
+	}
+	if _, err := st.AddComment(ctx, wi.ID, "agent", "hi", true); err != nil {
+		t.Fatalf("comment: %v", err)
+	}
+	assignee := "agent"
+	if _, err := st.Update(ctx, wi.ID, "agent", store.Patch{AssigneeID: &assignee}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	want := []string{
+		"itsm.ticket.created",
+		"itsm.ticket.status_changed",
+		"itsm.ticket.commented",
+		"itsm.ticket.assigned",
+	}
+	for _, w := range want {
+		if !slices.Contains(cap.subjects, w) {
+			t.Errorf("missing event %q; got %v", w, cap.subjects)
+		}
 	}
 }
 

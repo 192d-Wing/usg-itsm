@@ -20,6 +20,23 @@ PostgreSQL schema and validates OIDC bearer tokens independently of the gateway.
 Lifecycle: `new → in_progress ⇄ on_hold → resolved → closed`, with `cancelled`
 reachable from any non-terminal state and `resolved → in_progress` to reopen.
 
+## Events (ADR-0004)
+
+On each change the service persists an event row (durable history) and, when
+`NATS_URL` is set, publishes to NATS JetStream (stream `ITSM`, subjects
+`itsm.>`) best-effort — a bus failure never fails the request. Payload:
+`{ type, work_item_id, number, actor_id, data }`.
+
+| Subject                      | When               |
+|------------------------------|--------------------|
+| `itsm.ticket.created`        | work item opened   |
+| `itsm.ticket.status_changed` | status transition  |
+| `itsm.ticket.assigned`       | assignee changed   |
+| `itsm.ticket.updated`        | other field update |
+| `itsm.ticket.commented`      | comment added      |
+
+These feed the future notification, audit, and search-projection services.
+
 ## Configuration
 
 | Env              | Required | Notes                                            |
@@ -28,6 +45,7 @@ reachable from any non-terminal state and `resolved → in_progress` to reopen.
 | `DATABASE_SCHEMA`| no       | Defaults to `ticketing`                          |
 | `OIDC_ISSUER`    | yes      | Token validation issuer                          |
 | `OIDC_AUDIENCE`  | yes      | Expected `aud`                                   |
+| `NATS_URL`       | no       | JetStream endpoint; empty = DB-only events       |
 | `ADDR`           | no       | Defaults to `:8445`                              |
 
 Migrations in `internal/store/migrations/` are embedded and applied at startup.
@@ -36,5 +54,5 @@ Migrations in `internal/store/migrations/` are embedded and applied at startup.
 
 - `internal/domain` — pure state-machine and helper unit tests (always run).
 - `internal/api` — handler tests with a fake store + fake verifier (always run).
-- `internal/store` — integration tests; run only when `TEST_DATABASE_URL` is set
-  (CI provides a Postgres service).
+- `internal/store` — integration tests (incl. event publishing); run only when
+  `TEST_DATABASE_URL` is set (CI provides Postgres).

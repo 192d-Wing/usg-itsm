@@ -21,14 +21,65 @@ var (
 	ErrInvalidTransition = errors.New("invalid status transition")
 )
 
+// Publisher emits ticket events to the message bus. The DB events table is the
+// durable record; bus delivery is best-effort (ADR-0004).
+type Publisher interface {
+	Publish(ctx context.Context, subject string, data []byte) error
+}
+
+type nopPublisher struct{}
+
+func (nopPublisher) Publish(context.Context, string, []byte) error { return nil }
+
 // Store persists work items.
 type Store struct {
 	pool *pgxpool.Pool
+	pub  Publisher
 }
 
-// New returns a Store backed by pool.
-func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool}
+// Option configures a Store.
+type Option func(*Store)
+
+// WithPublisher sets the event publisher used to emit ticket events.
+func WithPublisher(p Publisher) Option {
+	return func(s *Store) { s.pub = p }
+}
+
+// New returns a Store backed by pool. By default events are persisted to the
+// database only; pass WithPublisher to also emit them to the bus.
+func New(pool *pgxpool.Pool, opts ...Option) *Store {
+	s := &Store{pool: pool, pub: nopPublisher{}}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
+
+const subjectPrefix = "itsm.ticket."
+
+// ticketEvent is the bus payload for a ticket change.
+type ticketEvent struct {
+	Type       string         `json:"type"`
+	WorkItemID string         `json:"work_item_id"`
+	Number     string         `json:"number,omitempty"`
+	ActorID    string         `json:"actor_id"`
+	Data       map[string]any `json:"data,omitempty"`
+}
+
+// publish emits a ticket event best-effort: a bus failure never fails the
+// request, since the events table already holds the durable record.
+func (s *Store) publish(ctx context.Context, kind, workItemID, number, actor string, data map[string]any) {
+	b, err := json.Marshal(ticketEvent{
+		Type:       "ticket." + kind,
+		WorkItemID: workItemID,
+		Number:     number,
+		ActorID:    actor,
+		Data:       data,
+	})
+	if err != nil {
+		return
+	}
+	_ = s.pub.Publish(ctx, subjectPrefix+kind, b)
 }
 
 const workItemColumns = `id, number, type, title, description, status, priority,
@@ -83,6 +134,9 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (domain.WorkItem, er
 	if err := tx.Commit(ctx); err != nil {
 		return domain.WorkItem{}, err
 	}
+	s.publish(ctx, domain.EventCreated, wi.ID, wi.Number, in.RequesterID, map[string]any{
+		"type": in.Type, "priority": in.Priority,
+	})
 	return wi, nil
 }
 
@@ -223,6 +277,7 @@ func (s *Store) Update(ctx context.Context, id, actorID string, p Patch) (domain
 	if err := tx.Commit(ctx); err != nil {
 		return domain.WorkItem{}, err
 	}
+	s.publish(ctx, kind, wi.ID, wi.Number, actorID, nil)
 	return wi, nil
 }
 
@@ -266,6 +321,9 @@ func (s *Store) Transition(ctx context.Context, id, actorID string, to domain.St
 	if err := tx.Commit(ctx); err != nil {
 		return domain.WorkItem{}, err
 	}
+	s.publish(ctx, domain.EventStatusChanged, wi.ID, wi.Number, actorID, map[string]any{
+		"from": current, "to": to,
+	})
 	return wi, nil
 }
 
@@ -303,6 +361,9 @@ func (s *Store) AddComment(ctx context.Context, workItemID, authorID, body strin
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Comment{}, err
 	}
+	s.publish(ctx, domain.EventCommented, workItemID, "", authorID, map[string]any{
+		"internal": internal,
+	})
 	return c, nil
 }
 
