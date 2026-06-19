@@ -44,6 +44,15 @@ type Config struct {
 	DatabaseURL    string
 	DatabaseSchema string
 
+	// TicketingURL is the ticketing upstream the gateway routes to (gateway
+	// only), e.g. https://ticketing:8445. Empty disables ticket routing.
+	TicketingURL string
+
+	// InternalCAFile is the PEM CA bundle used to verify internal service
+	// certificates for service-to-service TLS. Empty in dev falls back to
+	// skip-verify; outside dev a CA (or system trust) is used.
+	InternalCAFile string
+
 	// ShutdownTimeout bounds graceful shutdown.
 	ShutdownTimeout time.Duration
 }
@@ -63,6 +72,8 @@ func Load(service, defaultAddr string) Config {
 		RolesClaim:      env("OIDC_ROLES_CLAIM", "roles"),
 		DatabaseURL:     env("DATABASE_URL", ""),
 		DatabaseSchema:  env("DATABASE_SCHEMA", service),
+		TicketingURL:    env("TICKETING_URL", ""),
+		InternalCAFile:  env("INTERNAL_CA_FILE", ""),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}
 }
