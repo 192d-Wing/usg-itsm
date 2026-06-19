@@ -3,8 +3,10 @@ kind: Kustomization
 
 namespace: usg-itsm
 
-commonLabels:
-  app.kubernetes.io/part-of: usg-itsm
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: usg-itsm
+    includeSelectors: true
 
 resources:
   - namespace.yaml

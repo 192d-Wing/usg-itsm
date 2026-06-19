@@ -11,18 +11,18 @@ patches:
       kind: Service
       name: gateway
 
-# Point image references at the cluster-reachable registry (Harbor, air-gapped).
-# Replace the registry host and tag for your environment.
+# Images published by the publish-images workflow (multi-arch amd64+arm64).
+# For a fully air-gapped cluster, mirror these into Harbor and repoint here.
 images:
   - name: usg-itsm/gateway
-    newName: harbor.dev.mil/usg-itsm/gateway
+    newName: ghcr.io/192d-wing/usg-itsm/gateway
     newTag: latest
   - name: usg-itsm/identity
-    newName: harbor.dev.mil/usg-itsm/identity
+    newName: ghcr.io/192d-wing/usg-itsm/identity
     newTag: latest
   - name: usg-itsm/ticketing
-    newName: harbor.dev.mil/usg-itsm/ticketing
+    newName: ghcr.io/192d-wing/usg-itsm/ticketing
     newTag: latest
   - name: usg-itsm/notification
-    newName: harbor.dev.mil/usg-itsm/notification
+    newName: ghcr.io/192d-wing/usg-itsm/notification
     newTag: latest

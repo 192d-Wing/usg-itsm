@@ -1,10 +1,14 @@
-# Promote the gateway to a LoadBalancer holding the dev anycast VIP
-# (2601:443:c200:575::60). itsm.dev.mil resolves (AAAA) to this address.
+# Promote the gateway to a dual-stack LoadBalancer at the edge: the IPv4 VIP
+# (10.10.10.60) is the only place IPv4 appears, and the IPv6 anycast VIP
+# (2601:443:c200:575::60) carries native IPv6. itsm.dev.mil → A 10.10.10.60 +
+# AAAA 2601:443:c200:575::60. Backend services stay IPv6-only (ADR-0009).
 apiVersion: v1
 kind: Service
 metadata:
   name: gateway
   annotations:
-    lbipam.cilium.io/ips: "2601:443:c200:575::60"
+    lbipam.cilium.io/ips: "10.10.10.60,2601:443:c200:575::60"
 spec:
   type: LoadBalancer
+  ipFamilyPolicy: PreferDualStack
+  ipFamilies: [IPv6, IPv4]

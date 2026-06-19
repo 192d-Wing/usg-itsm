@@ -1,12 +1,15 @@
-# Cilium LB IPAM pool holding the dev anycast VIP. The gateway Service requests
-# this address via the lbipam.cilium.io/ips annotation (see gateway-lb.yaml).
-#
-# apiVersion is version-dependent: cilium.io/v2alpha1 for Cilium 1.14–1.15,
-# cilium.io/v2 for Cilium >= 1.16. Match your cluster's Cilium version.
-apiVersion: cilium.io/v2alpha1
+# Cilium LB IPAM pool for ITSM, following the cluster's per-service "*-anycast"
+# convention (apiVersion cilium.io/v2 on this cluster). Holds the IPv4 edge VIP
+# and the IPv6 anycast VIP; the gateway Service (matched by serviceSelector)
+# requests them via the lbipam.cilium.io/ips annotation (see gateway-lb.yaml).
+apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:
-  name: itsm-dev
+  name: itsm-anycast
 spec:
   blocks:
+    - cidr: "10.10.10.60/32"
     - cidr: "2601:443:c200:575::60/128"
+  serviceSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: usg-itsm
