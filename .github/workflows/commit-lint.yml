@@ -1,0 +1,54 @@
+name: commit-lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR title and commits
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._-]+\))?(!)?: .+'
+
+          fail=0
+          check() {
+            local subject="$1" label="$2"
+            case "$subject" in
+              "Merge "*|"Revert "*) return 0 ;;
+            esac
+            if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
+              echo "::error::$label is not a Conventional Commit: $subject"
+              fail=1
+            fi
+          }
+
+          echo "Checking PR title..."
+          check "$PR_TITLE" "PR title"
+
+          echo "Checking commits in range $BASE_SHA..$HEAD_SHA"
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            check "$subject" "Commit"
+          done < <(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::See CONTRIBUTING.md for the Conventional Commits spec."
+            exit 1
+          fi
+          echo "All commit subjects conform to Conventional Commits."

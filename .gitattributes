@@ -1,2 +1,14 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Files that must keep LF endings regardless of platform (break otherwise).
+*.sh        text eol=lf
+*.go        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Makefile    text eol=lf
+.githooks/* text eol=lf
+go.work     text eol=lf
+go.mod      text eol=lf
+go.sum      text eol=lf
+Dockerfile  text eol=lf

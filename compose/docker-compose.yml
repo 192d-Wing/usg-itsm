@@ -1,0 +1,74 @@
+# Local development stack for USG-ITSM.
+#
+# Brings up the shared dependencies the services need. Image tags are pinned;
+# in air-gapped environments mirror these into Harbor and repoint the registry.
+#
+#   make up      # start
+#   make down    # stop
+#
+# NOTE: these settings are for LOCAL DEV ONLY. Credentials are non-secret
+# defaults; never reuse them in any real environment.
+
+name: usg-itsm
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: itsm
+      POSTGRES_PASSWORD: itsm
+      POSTGRES_DB: itsm
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itsm -d itsm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+    volumes:
+      - natsdata:/data
+
+  olric:
+    image: olricio/olricd:v0.5.4
+    command: ["/usr/local/bin/olricd", "-config", "/etc/olricd.yaml"]
+    ports:
+      - "3320:3320"   # client (Olric binary protocol)
+      - "3322:3322"   # memberlist
+    volumes:
+      - ./olric/olricd.yaml:/etc/olricd.yaml:ro
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.73
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-master.volumeSizeLimitMB=128"]
+    ports:
+      - "8333:8333"   # S3 API
+      - "9333:9333"   # master
+    volumes:
+      - seaweeddata:/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-usg-itsm.json:/opt/keycloak/data/import/realm-usg-itsm.json:ro
+
+volumes:
+  pgdata:
+  natsdata:
+  seaweeddata:

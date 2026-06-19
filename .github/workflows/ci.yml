@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  go:
+    name: go build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: gofmt check
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet (all modules)
+        run: |
+          set -e
+          for mod in $(git ls-files '**/go.mod' go.mod 2>/dev/null | xargs -r -n1 dirname | sort -u); do
+            echo "== vet $mod =="
+            (cd "$mod" && go vet ./...)
+          done
+
+      - name: go build (all modules)
+        run: |
+          set -e
+          for mod in $(git ls-files '**/go.mod' go.mod 2>/dev/null | xargs -r -n1 dirname | sort -u); do
+            echo "== build $mod =="
+            (cd "$mod" && go build ./...)
+          done
+
+      - name: go test (all modules)
+        run: |
+          set -e
+          for mod in $(git ls-files '**/go.mod' go.mod 2>/dev/null | xargs -r -n1 dirname | sort -u); do
+            echo "== test $mod =="
+            (cd "$mod" && go test ./... -race -count=1)
+          done
+
+  # The web (SPA) job is added with the React app in a later phase; a job-level
+  # `if` cannot use hashFiles(), so we reintroduce it when web/ exists.

@@ -1,0 +1,30 @@
+# Olric standalone dev config (ADR-0003). Single-node, local environment.
+# Verify against the pinned olricd image version on first bring-up; the config
+# schema can shift between Olric releases.
+
+olricd:
+  bindAddr: "0.0.0.0"
+  bindPort: 3320
+  serializer: "msgpack"
+  keepAlivePeriod: "300s"
+  bootstrapTimeout: "5s"
+  partitionCount: 271
+  replicaCount: 1
+  readRepair: false
+  readQuorum: 1
+  writeQuorum: 1
+  memberCountQuorum: 1
+
+logging:
+  level: "INFO"
+  output: "stderr"
+
+memberlist:
+  environment: "local"
+  bindAddr: "0.0.0.0"
+  bindPort: 3322
+
+dmaps:
+  numEvictionWorkers: 1
+  maxIdleDuration: ""
+  ttlDuration: ""
