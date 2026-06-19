@@ -44,9 +44,16 @@ type Config struct {
 	DatabaseURL    string
 	DatabaseSchema string
 
-	// NatsURL is the NATS JetStream endpoint for event publishing. Empty
-	// disables publishing (events still persist in the database).
+	// NatsURL is the NATS JetStream endpoint for event publishing/consuming.
+	// Empty disables publishing (events still persist in the database).
 	NatsURL string
+
+	// Notification channels (notification service). Each empty value disables
+	// that channel; with none configured, notifications are logged only.
+	NotifyWebhookURL string // POST target for ticket notifications
+	SMTPAddr         string // SMTP relay host:port
+	SMTPFrom         string // From address
+	NotifyEmail      string // comma-separated recipient list
 
 	// TicketingURL is the ticketing upstream the gateway routes to (gateway
 	// only), e.g. https://ticketing:8445. Empty disables ticket routing.
@@ -69,22 +76,26 @@ type Config struct {
 // defaultAddr is the service's listen address when ADDR is not set.
 func Load(service, defaultAddr string) Config {
 	return Config{
-		ServiceName:     service,
-		Addr:            env("ADDR", defaultAddr),
-		Environment:     env("ENVIRONMENT", "dev"),
-		LogLevel:        env("LOG_LEVEL", "info"),
-		TLSCertFile:     env("TLS_CERT_FILE", ""),
-		TLSKeyFile:      env("TLS_KEY_FILE", ""),
-		OIDCIssuer:      env("OIDC_ISSUER", ""),
-		OIDCAudience:    env("OIDC_AUDIENCE", ""),
-		RolesClaim:      env("OIDC_ROLES_CLAIM", "roles"),
-		DatabaseURL:     env("DATABASE_URL", ""),
-		DatabaseSchema:  env("DATABASE_SCHEMA", service),
-		NatsURL:         env("NATS_URL", ""),
-		TicketingURL:    env("TICKETING_URL", ""),
-		InternalCAFile:  env("INTERNAL_CA_FILE", ""),
-		WebDir:          env("WEB_DIR", ""),
-		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
+		ServiceName:      service,
+		Addr:             env("ADDR", defaultAddr),
+		Environment:      env("ENVIRONMENT", "dev"),
+		LogLevel:         env("LOG_LEVEL", "info"),
+		TLSCertFile:      env("TLS_CERT_FILE", ""),
+		TLSKeyFile:       env("TLS_KEY_FILE", ""),
+		OIDCIssuer:       env("OIDC_ISSUER", ""),
+		OIDCAudience:     env("OIDC_AUDIENCE", ""),
+		RolesClaim:       env("OIDC_ROLES_CLAIM", "roles"),
+		DatabaseURL:      env("DATABASE_URL", ""),
+		DatabaseSchema:   env("DATABASE_SCHEMA", service),
+		NatsURL:          env("NATS_URL", ""),
+		NotifyWebhookURL: env("NOTIFY_WEBHOOK_URL", ""),
+		SMTPAddr:         env("SMTP_ADDR", ""),
+		SMTPFrom:         env("SMTP_FROM", "usg-itsm@localhost"),
+		NotifyEmail:      env("NOTIFY_EMAIL", ""),
+		TicketingURL:     env("TICKETING_URL", ""),
+		InternalCAFile:   env("INTERNAL_CA_FILE", ""),
+		WebDir:           env("WEB_DIR", ""),
+		ShutdownTimeout:  envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}
 }
 

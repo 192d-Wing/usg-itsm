@@ -13,9 +13,40 @@ import (
 	"syscall"
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
+	"github.com/192d-Wing/usg-itsm/pkg/httpx"
+	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/tlsconf"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
+
+// Bootstrap is the standard main() for a service: load config for the named
+// service, build the logger, run run, and exit non-zero on error.
+func Bootstrap(service, defaultAddr string, run func(config.Config, *slog.Logger) error) {
+	cfg := config.Load(service, defaultAddr)
+	logger := log.New(cfg.ServiceName, cfg.LogLevel)
+	if err := run(cfg, logger); err != nil {
+		logger.Error(service+" exited with error", "err", err)
+		os.Exit(1)
+	}
+}
+
+// NewApp builds a Fiber app with the standard middleware stack every service
+// shares: the uniform error envelope, request IDs, panic recovery, and the
+// liveness/readiness endpoints. ready may be nil. Mount service routes on the
+// returned app, then pass it to Run.
+func NewApp(name string, ready func() error) *fiber.App {
+	app := fiber.New(fiber.Config{
+		AppName:               name,
+		DisableStartupMessage: true,
+		ErrorHandler:          httpx.DefaultErrorHandler,
+	})
+	app.Use(requestid.New())
+	app.Use(recover.New())
+	httpx.Health(app, ready)
+	return app
+}
 
 // Run serves app on a TLS 1.3 listener bound to cfg.Addr and blocks until a
 // shutdown signal (SIGINT/SIGTERM) or a fatal listener error. It returns the

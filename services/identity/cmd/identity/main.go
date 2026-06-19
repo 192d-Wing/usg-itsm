@@ -5,37 +5,16 @@ package main
 
 import (
 	"log/slog"
-	"os"
 
 	"github.com/192d-Wing/usg-itsm/pkg/config"
-	"github.com/192d-Wing/usg-itsm/pkg/httpx"
-	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
-func main() {
-	cfg := config.Load("identity", ":8444")
-	logger := log.New(cfg.ServiceName, cfg.LogLevel)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Error("identity exited with error", "err", err)
-		os.Exit(1)
-	}
-}
+func main() { server.Bootstrap("identity", ":8444", run) }
 
 func run(cfg config.Config, logger *slog.Logger) error {
-	app := fiber.New(fiber.Config{
-		AppName:               "usg-itsm-identity",
-		DisableStartupMessage: true,
-		ErrorHandler:          httpx.DefaultErrorHandler,
-	})
-	app.Use(requestid.New())
-	app.Use(recover.New())
-
-	httpx.Health(app, nil)
+	app := server.NewApp("usg-itsm-identity", nil)
 
 	app.Get("/internal/v1/ping", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"service": cfg.ServiceName, "status": "ok"})

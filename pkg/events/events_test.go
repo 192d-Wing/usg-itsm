@@ -73,3 +73,57 @@ func TestNATSPublisher_Publish(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// TestConsume verifies a durable consumer receives a published event.
+func TestConsume(t *testing.T) {
+	url := os.Getenv("TEST_NATS_URL")
+	if url == "" {
+		t.Skip("TEST_NATS_URL not set; skipping NATS integration test")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	const stream = "ITSM_CONSUME_TEST"
+	if nc, err := nats.Connect(url); err == nil {
+		if js, err := jetstream.New(nc); err == nil {
+			_ = js.DeleteStream(ctx, stream)
+		}
+		nc.Close()
+	}
+
+	pub, err := events.Connect(ctx, url, stream, []string{"itsm.>"})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pub.Close()
+
+	got := make(chan string, 1)
+	consumer, err := events.Consume(ctx, url, events.ConsumeConfig{
+		Stream:   stream,
+		Durable:  "test",
+		Subjects: []string{"itsm.ticket.*"},
+	}, func(subject string, _ []byte) error {
+		select {
+		case got <- subject:
+		default:
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("consume: %v", err)
+	}
+	defer consumer.Close()
+
+	if err := pub.Publish(ctx, "itsm.ticket.created", []byte(`{"type":"ticket.created"}`)); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	select {
+	case subject := <-got:
+		if subject != "itsm.ticket.created" {
+			t.Fatalf("got subject %q", subject)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not receive event within timeout")
+	}
+}

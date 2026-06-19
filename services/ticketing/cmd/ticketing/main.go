@@ -8,32 +8,18 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
 	"github.com/192d-Wing/usg-itsm/pkg/config"
 	"github.com/192d-Wing/usg-itsm/pkg/db"
 	"github.com/192d-Wing/usg-itsm/pkg/events"
-	"github.com/192d-Wing/usg-itsm/pkg/httpx"
-	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
 	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/api"
 	"github.com/192d-Wing/usg-itsm/services/ticketing/internal/store"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
-func main() {
-	cfg := config.Load("ticketing", ":8445")
-	logger := log.New(cfg.ServiceName, cfg.LogLevel)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Error("ticketing exited with error", "err", err)
-		os.Exit(1)
-	}
-}
+func main() { server.Bootstrap("ticketing", ":8445", run) }
 
 func run(cfg config.Config, logger *slog.Logger) error {
 	if cfg.DatabaseURL == "" {
@@ -79,15 +65,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 
 	handlers := api.New(store.New(pool, storeOpts...))
 
-	app := fiber.New(fiber.Config{
-		AppName:               "usg-itsm-ticketing",
-		DisableStartupMessage: true,
-		ErrorHandler:          httpx.DefaultErrorHandler,
-	})
-	app.Use(requestid.New())
-	app.Use(recover.New())
-
-	httpx.Health(app, func() error {
+	app := server.NewApp("usg-itsm-ticketing", func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		return pool.Ping(ctx)
