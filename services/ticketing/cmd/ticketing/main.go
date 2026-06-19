@@ -14,6 +14,7 @@ import (
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
 	"github.com/192d-Wing/usg-itsm/pkg/config"
 	"github.com/192d-Wing/usg-itsm/pkg/db"
+	"github.com/192d-Wing/usg-itsm/pkg/events"
 	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
@@ -61,7 +62,22 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 
-	handlers := api.New(store.New(pool))
+	// Event publishing is optional: without NATS, events still persist to the
+	// database; with it, ticket changes fan out on "itsm.ticket.*" (ADR-0004).
+	storeOpts := []store.Option{}
+	if cfg.NatsURL != "" {
+		pub, err := events.Connect(startupCtx, cfg.NatsURL, "ITSM", []string{"itsm.>"})
+		if err != nil {
+			return err
+		}
+		defer pub.Close()
+		storeOpts = append(storeOpts, store.WithPublisher(pub))
+		logger.Info("event publishing enabled", "nats", cfg.NatsURL)
+	} else {
+		logger.Warn("NATS_URL not set; ticket events persist to the database only")
+	}
+
+	handlers := api.New(store.New(pool, storeOpts...))
 
 	app := fiber.New(fiber.Config{
 		AppName:               "usg-itsm-ticketing",

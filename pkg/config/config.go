@@ -44,6 +44,10 @@ type Config struct {
 	DatabaseURL    string
 	DatabaseSchema string
 
+	// NatsURL is the NATS JetStream endpoint for event publishing. Empty
+	// disables publishing (events still persist in the database).
+	NatsURL string
+
 	// TicketingURL is the ticketing upstream the gateway routes to (gateway
 	// only), e.g. https://ticketing:8445. Empty disables ticket routing.
 	TicketingURL string
@@ -76,6 +80,7 @@ func Load(service, defaultAddr string) Config {
 		RolesClaim:      env("OIDC_ROLES_CLAIM", "roles"),
 		DatabaseURL:     env("DATABASE_URL", ""),
 		DatabaseSchema:  env("DATABASE_SCHEMA", service),
+		NatsURL:         env("NATS_URL", ""),
 		TicketingURL:    env("TICKETING_URL", ""),
 		InternalCAFile:  env("INTERNAL_CA_FILE", ""),
 		WebDir:          env("WEB_DIR", ""),
