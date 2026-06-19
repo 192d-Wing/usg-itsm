@@ -6,7 +6,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"time"
 
@@ -15,6 +18,8 @@ import (
 	"github.com/192d-Wing/usg-itsm/pkg/httpx"
 	"github.com/192d-Wing/usg-itsm/pkg/log"
 	"github.com/192d-Wing/usg-itsm/pkg/server"
+	"github.com/192d-Wing/usg-itsm/pkg/tlsconf"
+	"github.com/192d-Wing/usg-itsm/services/gateway/internal/gw"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
@@ -52,13 +57,47 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		if err != nil {
 			return err
 		}
-		api.Get("/me", auth.RequireAuth(verifier), me)
+		api.Use(auth.RequireAuth(verifier))
+		api.Get("/me", me)
 		logger.Info("OIDC auth enabled", "issuer", cfg.OIDCIssuer)
+
+		if err := mountUpstreams(api, cfg, logger); err != nil {
+			return err
+		}
 	} else {
 		logger.Warn("OIDC issuer not set; protected API routes are disabled (dev only)")
 	}
 
 	return server.Run(cfg, app, logger)
+}
+
+// mountUpstreams wires gateway routing to backend services over TLS 1.3.
+func mountUpstreams(r fiber.Router, cfg config.Config, logger *slog.Logger) error {
+	if cfg.TicketingURL == "" {
+		logger.Warn("TICKETING_URL not set; ticket routing disabled")
+		return nil
+	}
+	if u, err := url.Parse(cfg.TicketingURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid TICKETING_URL %q: must be an http(s) URL", cfg.TicketingURL)
+	}
+	// Internal certs are issued by the cluster CA (cert-manager), which is not
+	// in the system trust store; require it outside dev so a missing CA fails
+	// fast instead of surfacing as opaque 502s.
+	if !cfg.IsDev() && cfg.InternalCAFile == "" {
+		return errors.New("INTERNAL_CA_FILE is required outside dev for internal TLS verification")
+	}
+
+	clientTLS, err := tlsconf.Client(cfg.InternalCAFile, cfg.IsDev())
+	if err != nil {
+		return err
+	}
+	h := gw.Proxy(cfg.TicketingURL, gw.NewUpstreamClient(clientTLS), gw.DefaultUpstreamTimeout)
+	r.All("/tickets", h)
+	r.All("/tickets/*", h)
+	logger.Info("routing /api/v1/tickets -> ticketing",
+		"upstream", cfg.TicketingURL, "insecure_skip_verify", cfg.InternalCAFile == "" && cfg.IsDev())
+	return nil
 }
 
 // me returns the validated caller's claims.

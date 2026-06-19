@@ -9,9 +9,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"time"
 )
 
@@ -28,6 +30,29 @@ func Server(cert tls.Certificate) *tls.Config {
 	cfg := Base()
 	cfg.Certificates = []tls.Certificate{cert}
 	return cfg
+}
+
+// Client returns a TLS 1.3 client config for service-to-service calls. When
+// caFile is set, only certificates chaining to that CA are trusted. When caFile
+// is empty and allowInsecure is true (dev only), certificate verification is
+// skipped. Otherwise the system trust store is used.
+func Client(caFile string, allowInsecure bool) (*tls.Config, error) {
+	cfg := Base()
+	switch {
+	case caFile != "":
+		pem, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("read CA file: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, errors.New("no certificates found in CA file")
+		}
+		cfg.RootCAs = pool
+	case allowInsecure:
+		cfg.InsecureSkipVerify = true //nolint:gosec // dev-only, gated by caller
+	}
+	return cfg, nil
 }
 
 // LoadServer loads a PEM cert/key pair into a TLS 1.3 server config.
