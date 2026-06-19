@@ -15,6 +15,20 @@ jobs:
   go:
     name: go build / vet / test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: itsm
+          POSTGRES_PASSWORD: itsm
+          POSTGRES_DB: itsm
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U itsm -d itsm"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://itsm:itsm@localhost:5432/itsm?sslmode=disable
     steps:
       - uses: actions/checkout@v6
 

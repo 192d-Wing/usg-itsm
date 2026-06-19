@@ -4,4 +4,5 @@ use (
 	./pkg
 	./services/gateway
 	./services/identity
+	./services/ticketing
 )
