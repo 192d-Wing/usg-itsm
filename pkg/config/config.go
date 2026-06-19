@@ -53,6 +53,10 @@ type Config struct {
 	// skip-verify; outside dev a CA (or system trust) is used.
 	InternalCAFile string
 
+	// WebDir is the directory of built SPA assets the gateway serves (gateway
+	// only). Empty disables static serving (dev runs the SPA on Vite).
+	WebDir string
+
 	// ShutdownTimeout bounds graceful shutdown.
 	ShutdownTimeout time.Duration
 }
@@ -74,6 +78,7 @@ func Load(service, defaultAddr string) Config {
 		DatabaseSchema:  env("DATABASE_SCHEMA", service),
 		TicketingURL:    env("TICKETING_URL", ""),
 		InternalCAFile:  env("INTERNAL_CA_FILE", ""),
+		WebDir:          env("WEB_DIR", ""),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}
 }

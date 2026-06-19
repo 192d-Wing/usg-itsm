@@ -47,6 +47,15 @@ func run(cfg config.Config, logger *slog.Logger) error {
 
 	httpx.Health(app, nil)
 
+	// Runtime SPA config: the served bundle is environment-agnostic and fetches
+	// its OIDC settings here at startup, so one image works across deployments.
+	app.Get("/config.json", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"oidcAuthority": cfg.OIDCIssuer,
+			"oidcClientId":  cfg.OIDCAudience,
+		})
+	})
+
 	// Build the OIDC verifier when configured. In dev without an issuer the
 	// gateway still serves public routes but protected routes are unavailable.
 	api := app.Group("/api/v1")
@@ -66,6 +75,13 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		}
 	} else {
 		logger.Warn("OIDC issuer not set; protected API routes are disabled (dev only)")
+	}
+
+	// Serve the built SPA (with history-API fallback) when configured. Mounted
+	// last so it never shadows the API or health routes.
+	if cfg.WebDir != "" {
+		app.Use(gw.WebUI(cfg.WebDir))
+		logger.Info("serving SPA", "dir", cfg.WebDir)
 	}
 
 	return server.Run(cfg, app, logger)
