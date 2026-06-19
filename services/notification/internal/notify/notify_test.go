@@ -138,6 +138,23 @@ func TestDispatcher_ReturnsErrorWhenChannelFails(t *testing.T) {
 	}
 }
 
+func TestDispatcher_RecoversPanic(t *testing.T) {
+	d := NewDispatcher(discardLogger(), panicNotifier{})
+	ev, _ := json.Marshal(Event{Type: "ticket.created", Number: "INC1"})
+	err := d.Handle("itsm.ticket.created", ev) // must not panic
+	if err == nil {
+		t.Fatal("want error so the message is redelivered after a panic")
+	}
+}
+
+func TestBuildEmail_StripsHeaderInjection(t *testing.T) {
+	msg := buildEmail("a@x", []string{"b@x"}, Message{Title: "hi\r\nBcc: evil@x", Body: "body"})
+	s := string(msg)
+	if strings.Contains(s, "Bcc:") && strings.Contains(s, "\r\nBcc:") {
+		t.Fatalf("header injection not neutralized:\n%s", s)
+	}
+}
+
 type fakeNotifier struct {
 	calls int
 	err   error
@@ -148,5 +165,10 @@ func (f *fakeNotifier) Notify(context.Context, Message) error {
 	f.calls++
 	return f.err
 }
+
+type panicNotifier struct{}
+
+func (panicNotifier) Name() string                          { return "panic" }
+func (panicNotifier) Notify(context.Context, Message) error { panic("boom") }
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

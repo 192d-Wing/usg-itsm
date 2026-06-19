@@ -135,6 +135,13 @@ func Consume(ctx context.Context, url string, cfg ConsumeConfig, handler Handler
 	}
 
 	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		// Last-resort safety net: a panicking handler must not kill the
+		// consumer goroutine. Nak so JetStream redelivers.
+		defer func() {
+			if r := recover(); r != nil {
+				_ = msg.Nak()
+			}
+		}()
 		if err := handler(msg.Subject(), msg.Data()); err != nil {
 			_ = msg.Nak()
 			return

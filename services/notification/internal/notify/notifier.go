@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/smtp"
@@ -54,6 +55,8 @@ func (n WebhookNotifier) Notify(ctx context.Context, m Message) error {
 		return err
 	}
 	defer res.Body.Close()
+	// Drain so the keep-alive connection can be reused.
+	_, _ = io.Copy(io.Discard, res.Body)
 	if res.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("webhook returned %d", res.StatusCode)
 	}
@@ -84,7 +87,12 @@ func (n SMTPNotifier) Notify(_ context.Context, m Message) error {
 func buildEmail(from string, to []string, m Message) []byte {
 	return fmt.Appendf(nil,
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
-		from, strings.Join(to, ", "), m.Title, m.Body)
+		from, strings.Join(to, ", "), headerSafe(m.Title), m.Body)
+}
+
+// headerSafe removes CR/LF so a value can't inject additional email headers.
+func headerSafe(s string) string {
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 }
 
 // Dispatcher renders an event and delivers it over all configured channels.
@@ -102,7 +110,15 @@ func NewDispatcher(logger *slog.Logger, notifiers ...Notifier) *Dispatcher {
 // (returns nil, so it is not redelivered); a channel failure returns an error
 // so JetStream redelivers (up to the consumer's MaxDeliver). Note: redelivery
 // can duplicate notifications on channels that already succeeded.
-func (d *Dispatcher) Handle(subject string, data []byte) error {
+func (d *Dispatcher) Handle(subject string, data []byte) (err error) {
+	// A panic must not stall the consumer: log it and nak for redelivery.
+	defer func() {
+		if r := recover(); r != nil {
+			d.logger.Error("panic handling event", "subject", subject, "panic", r)
+			err = fmt.Errorf("panic handling %s: %v", subject, r)
+		}
+	}()
+
 	var e Event
 	if err := json.Unmarshal(data, &e); err != nil {
 		d.logger.Warn("dropping malformed event", "subject", subject, "err", err)
