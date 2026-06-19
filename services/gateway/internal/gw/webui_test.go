@@ -37,6 +37,7 @@ func webApp(t *testing.T) *fiber.App {
 	app := fiber.New()
 	// API + health are registered before the SPA fallback.
 	app.Get("/healthz", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) })
+	app.Get("/config.json", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"oidcAuthority": "x"}) })
 	app.Get("/api/v1/ping", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"pong": true}) })
 	app.Use(gw.WebUI(dir))
 	return app
@@ -91,5 +92,13 @@ func TestWebUI_DoesNotShadowHealth(t *testing.T) {
 	status, body := get(t, app, "/healthz")
 	if status != fiber.StatusOK || !strings.Contains(body, "ok") {
 		t.Fatalf("health: status=%d body=%q", status, body)
+	}
+}
+
+func TestWebUI_DoesNotShadowConfig(t *testing.T) {
+	app := webApp(t)
+	status, body := get(t, app, "/config.json")
+	if status != fiber.StatusOK || !strings.Contains(body, "oidcAuthority") {
+		t.Fatalf("config: status=%d body=%q", status, body)
 	}
 }

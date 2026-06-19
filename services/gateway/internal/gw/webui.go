@@ -19,7 +19,8 @@ func WebUI(dir string) fiber.Handler {
 		NotFoundFile: "index.html",
 		Next: func(c *fiber.Ctx) bool {
 			p := c.Path()
-			return strings.HasPrefix(p, "/api/") || p == "/healthz" || p == "/readyz"
+			return p == "/api" || strings.HasPrefix(p, "/api/") ||
+				p == "/healthz" || p == "/readyz" || p == "/config.json"
 		},
 	})
 }

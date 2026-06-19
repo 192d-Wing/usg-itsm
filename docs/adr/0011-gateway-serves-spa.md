@@ -20,7 +20,11 @@ fall through to their handlers; the static handler is mounted last.
   the gateway (go), and the final image serves `dist` from `/web`
   (`WEB_DIR=/web`).
 - In dev, `WEB_DIR` is empty; the SPA runs on the Vite dev server, which
-  proxies `/api` to the gateway.
+  proxies `/api` and `/config.json` to the gateway.
+- **Runtime config:** the gateway serves `GET /config.json` (OIDC authority +
+  client id from its env). The SPA fetches it at startup, so the built bundle is
+  environment-agnostic — one image runs across deployments without rebuilding.
+  In dev the SPA falls back to build-time `VITE_*` if `/config.json` is absent.
 
 ## Consequences
 

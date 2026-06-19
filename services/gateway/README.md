@@ -17,6 +17,7 @@ SPA.
 | Path                      | Target                          |
 |---------------------------|---------------------------------|
 | `GET /healthz`, `/readyz` | gateway (public)                |
+| `GET /config.json`        | gateway (public SPA runtime config: OIDC authority + client id) |
 | `GET /api/v1/me`          | gateway (returns caller claims) |
 | `/api/v1/tickets[/*]`     | ticketing (`TICKETING_URL`)     |
 | everything else           | SPA static assets (`WEB_DIR`)   |
