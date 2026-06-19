@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification
+  template:
+    metadata:
+      labels:
+        app: notification
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: notification
+          image: usg-itsm/notification:latest
+          ports:
+            - containerPort: 8446
+          envFrom:
+            - configMapRef:
+                name: itsm-config
+            - secretRef:
+                name: itsm-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8446
+              scheme: HTTPS
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification
+spec:
+  ipFamilyPolicy: SingleStack
+  ipFamilies: [IPv6]
+  selector:
+    app: notification
+  ports:
+    - port: 8446
+      targetPort: 8446

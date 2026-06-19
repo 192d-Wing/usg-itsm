@@ -1,0 +1,9 @@
+# Cilium LB IPAM pool holding the dev anycast VIP. The gateway Service requests
+# this address via the lbipam.cilium.io/ips annotation (see gateway-lb.yaml).
+apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: itsm-dev
+spec:
+  blocks:
+    - cidr: "2601:443:c200:575::60/128"

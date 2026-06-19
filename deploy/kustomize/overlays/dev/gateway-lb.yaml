@@ -1,0 +1,10 @@
+# Promote the gateway to a LoadBalancer holding the dev anycast VIP
+# (2601:443:c200:575::60). itsm.dev.mil resolves (AAAA) to this address.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  annotations:
+    lbipam.cilium.io/ips: "2601:443:c200:575::60"
+spec:
+  type: LoadBalancer

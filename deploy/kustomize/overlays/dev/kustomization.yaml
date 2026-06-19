@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ip-pool.yaml
+
+patches:
+  - path: gateway-lb.yaml
+    target:
+      kind: Service
+      name: gateway
+
+# Point image references at the cluster-reachable registry (Harbor, air-gapped).
+# Replace the registry host and tag for your environment.
+images:
+  - name: usg-itsm/gateway
+    newName: harbor.dev.mil/usg-itsm/gateway
+    newTag: latest
+  - name: usg-itsm/identity
+    newName: harbor.dev.mil/usg-itsm/identity
+    newTag: latest
+  - name: usg-itsm/ticketing
+    newName: harbor.dev.mil/usg-itsm/ticketing
+    newTag: latest
+  - name: usg-itsm/notification
+    newName: harbor.dev.mil/usg-itsm/notification
+    newTag: latest
