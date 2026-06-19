@@ -61,6 +61,8 @@ spec:
     - metadata:
         name: data
       spec:
+        # Uses the cluster's default StorageClass; set storageClassName
+        # explicitly if the cluster has no default.
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
