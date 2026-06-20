@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
@@ -114,13 +115,39 @@ func mountKeycloak(app *fiber.App, cfg config.Config, logger *slog.Logger) error
 	if err != nil {
 		return err
 	}
-	h := gw.Proxy(cfg.KeycloakURL, gw.NewUpstreamClient(clientTLS), gw.DefaultUpstreamTimeout)
-	for _, p := range []string{"/realms", "/resources", "/js"} {
+	h := gw.KeycloakProxy(cfg.KeycloakURL, gw.NewUpstreamClient(clientTLS), gw.DefaultUpstreamTimeout)
+
+	// Scope realm endpoints to our realm so the Keycloak master realm (admin)
+	// login is never exposed publicly. /resources and /js are realm-agnostic
+	// static assets needed by the login pages.
+	realmPath := "/realms"
+	if realm := realmFromIssuer(cfg.OIDCIssuer); realm != "" {
+		realmPath = "/realms/" + realm
+	} else {
+		logger.Warn("could not derive realm from OIDC_ISSUER; proxying all /realms (dev)")
+	}
+	for _, p := range []string{realmPath, "/resources", "/js"} {
 		app.All(p, h)
 		app.All(p+"/*", h)
 	}
-	logger.Info("routing Keycloak auth paths -> keycloak", "upstream", cfg.KeycloakURL)
+	logger.Info("routing Keycloak auth paths -> keycloak", "upstream", cfg.KeycloakURL, "realmPath", realmPath)
 	return nil
+}
+
+// realmFromIssuer extracts the realm name from an OIDC issuer URL like
+// https://host/realms/<realm>.
+func realmFromIssuer(issuer string) string {
+	u, err := url.Parse(issuer)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i, p := range parts {
+		if p == "realms" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }
 
 // me returns the validated caller's claims.

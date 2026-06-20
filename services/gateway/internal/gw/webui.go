@@ -21,8 +21,8 @@ func WebUI(dir string) fiber.Handler {
 			p := c.Path()
 			return p == "/api" || strings.HasPrefix(p, "/api/") ||
 				p == "/healthz" || p == "/readyz" || p == "/config.json" ||
-				strings.HasPrefix(p, "/realms") || strings.HasPrefix(p, "/resources") ||
-				strings.HasPrefix(p, "/js")
+				strings.HasPrefix(p, "/realms/") || strings.HasPrefix(p, "/resources/") ||
+				strings.HasPrefix(p, "/js/")
 		},
 	})
 }
