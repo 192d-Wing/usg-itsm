@@ -14,11 +14,25 @@ type OIDCVerifier struct {
 	rolesClaim string
 }
 
-// NewOIDCVerifier performs OIDC discovery against issuer and returns a verifier
-// bound to the given audience. rolesClaim names the top-level claim holding
-// role names; Keycloak's realm_access.roles is also checked as a fallback.
-func NewOIDCVerifier(ctx context.Context, issuer, audience, rolesClaim string) (*OIDCVerifier, error) {
-	provider, err := oidc.NewProvider(ctx, issuer)
+// NewOIDCVerifier returns a verifier bound to the given audience. rolesClaim
+// names the top-level claim holding role names; Keycloak's realm_access.roles
+// is also checked as a fallback.
+//
+// discoveryURL lets discovery be fetched from a different (e.g. in-cluster) URL
+// than the public issuer the tokens carry. When it differs from issuer, the
+// provider fetches metadata from discoveryURL but still validates tokens
+// against issuer — so a service can reach an internal Keycloak while accepting
+// tokens minted with the external https://itsm.dev.mil issuer. Empty
+// discoveryURL discovers at issuer.
+func NewOIDCVerifier(ctx context.Context, issuer, discoveryURL, audience, rolesClaim string) (*OIDCVerifier, error) {
+	disc := discoveryURL
+	if disc == "" {
+		disc = issuer
+	}
+	if disc != issuer {
+		ctx = oidc.InsecureIssuerURLContext(ctx, issuer)
+	}
+	provider, err := oidc.NewProvider(ctx, disc)
 	if err != nil {
 		return nil, fmt.Errorf("oidc discovery: %w", err)
 	}

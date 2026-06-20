@@ -40,7 +40,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	if cfg.AuthEnabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		verifier, err := auth.NewOIDCVerifier(ctx, cfg.OIDCIssuer, cfg.OIDCAudience, cfg.RolesClaim)
+		verifier, err := auth.NewOIDCVerifier(ctx, cfg.OIDCIssuer, cfg.OIDCDiscoveryURL, cfg.OIDCAudience, cfg.RolesClaim)
 		if err != nil {
 			return err
 		}
@@ -53,6 +53,12 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		}
 	} else {
 		logger.Warn("OIDC issuer not set; protected API routes are disabled (dev only)")
+	}
+
+	// Proxy Keycloak's browser-facing paths so the SPA, API, and auth all share
+	// the itsm.dev.mil origin. Mounted before the SPA so it isn't shadowed.
+	if err := mountKeycloak(app, cfg, logger); err != nil {
+		return err
 	}
 
 	// Serve the built SPA (with history-API fallback) when configured. Mounted
@@ -91,6 +97,29 @@ func mountUpstreams(r fiber.Router, cfg config.Config, logger *slog.Logger) erro
 	r.All("/tickets/*", h)
 	logger.Info("routing /api/v1/tickets -> ticketing",
 		"upstream", cfg.TicketingURL, "insecure_skip_verify", cfg.InternalCAFile == "" && cfg.IsDev())
+	return nil
+}
+
+// mountKeycloak proxies Keycloak's browser-facing paths so login happens on the
+// single itsm.dev.mil origin. /admin is intentionally not exposed.
+func mountKeycloak(app *fiber.App, cfg config.Config, logger *slog.Logger) error {
+	if cfg.KeycloakURL == "" {
+		return nil
+	}
+	if u, err := url.Parse(cfg.KeycloakURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid KEYCLOAK_URL %q: must be an http(s) URL", cfg.KeycloakURL)
+	}
+	clientTLS, err := tlsconf.Client(cfg.InternalCAFile, cfg.IsDev())
+	if err != nil {
+		return err
+	}
+	h := gw.Proxy(cfg.KeycloakURL, gw.NewUpstreamClient(clientTLS), gw.DefaultUpstreamTimeout)
+	for _, p := range []string{"/realms", "/resources", "/js"} {
+		app.All(p, h)
+		app.All(p+"/*", h)
+	}
+	logger.Info("routing Keycloak auth paths -> keycloak", "upstream", cfg.KeycloakURL)
 	return nil
 }
 

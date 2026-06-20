@@ -39,6 +39,7 @@ func webApp(t *testing.T) *fiber.App {
 	app.Get("/healthz", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok"}) })
 	app.Get("/config.json", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"oidcAuthority": "x"}) })
 	app.Get("/api/v1/ping", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"pong": true}) })
+	app.Get("/realms/usg-itsm", func(c *fiber.Ctx) error { return c.SendString("keycloak") })
 	app.Use(gw.WebUI(dir))
 	return app
 }
@@ -100,5 +101,13 @@ func TestWebUI_DoesNotShadowConfig(t *testing.T) {
 	status, body := get(t, app, "/config.json")
 	if status != fiber.StatusOK || !strings.Contains(body, "oidcAuthority") {
 		t.Fatalf("config: status=%d body=%q", status, body)
+	}
+}
+
+func TestWebUI_DoesNotShadowKeycloak(t *testing.T) {
+	app := webApp(t)
+	status, body := get(t, app, "/realms/usg-itsm")
+	if status != fiber.StatusOK || !strings.Contains(body, "keycloak") {
+		t.Fatalf("keycloak path: status=%d body=%q", status, body)
 	}
 }

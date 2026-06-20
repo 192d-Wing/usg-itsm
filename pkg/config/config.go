@@ -38,6 +38,15 @@ type Config struct {
 	// top-level array claim and Keycloak's realm_access.roles.
 	RolesClaim string
 
+	// OIDCDiscoveryURL, when set, is where OIDC metadata is fetched from
+	// (e.g. the in-cluster Keycloak), while tokens are still validated against
+	// OIDCIssuer (the public URL). Empty discovers at OIDCIssuer.
+	OIDCDiscoveryURL string
+
+	// KeycloakURL is the in-cluster Keycloak the gateway proxies browser auth
+	// paths (/realms, /resources, /js) to (gateway only). Empty disables it.
+	KeycloakURL string
+
 	// DatabaseURL is the PostgreSQL connection string (empty if the service is
 	// stateless). DatabaseSchema scopes the connection's search_path so each
 	// service owns its schema (ADR-0002).
@@ -85,6 +94,8 @@ func Load(service, defaultAddr string) Config {
 		OIDCIssuer:       env("OIDC_ISSUER", ""),
 		OIDCAudience:     env("OIDC_AUDIENCE", ""),
 		RolesClaim:       env("OIDC_ROLES_CLAIM", "roles"),
+		OIDCDiscoveryURL: env("OIDC_DISCOVERY_URL", ""),
+		KeycloakURL:      env("KEYCLOAK_URL", ""),
 		DatabaseURL:      env("DATABASE_URL", ""),
 		DatabaseSchema:   env("DATABASE_SCHEMA", service),
 		NatsURL:          env("NATS_URL", ""),
