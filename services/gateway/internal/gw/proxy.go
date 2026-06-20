@@ -53,3 +53,23 @@ func Proxy(upstream string, client *fasthttp.Client, timeout time.Duration) fibe
 		return nil
 	}
 }
+
+// KeycloakProxy forwards to a Keycloak upstream, advertising the external
+// scheme and host via X-Forwarded-* so Keycloak (with KC_PROXY_HEADERS=
+// xforwarded) builds correct itsm.dev.mil login/redirect URLs. The Host header
+// on the wire reflects the upstream (the proxy derives it from the URI), but
+// Keycloak honors X-Forwarded-Host. A failed call becomes 502.
+func KeycloakProxy(upstream string, client *fasthttp.Client, timeout time.Duration) fiber.Handler {
+	base := strings.TrimRight(upstream, "/")
+	if timeout <= 0 {
+		timeout = DefaultUpstreamTimeout
+	}
+	return func(c *fiber.Ctx) error {
+		c.Request().Header.Set("X-Forwarded-Proto", "https")
+		c.Request().Header.Set("X-Forwarded-Host", string(c.Request().Header.Host()))
+		if err := proxy.DoTimeout(c, base+c.OriginalURL(), timeout, client); err != nil {
+			return httpx.WriteError(c, fiber.StatusBadGateway, "bad_gateway", "keycloak unavailable")
+		}
+		return nil
+	}
+}

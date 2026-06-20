@@ -43,7 +43,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	}
 	logger.Info("migrations applied", "schema", cfg.DatabaseSchema)
 
-	verifier, err := auth.NewOIDCVerifier(startupCtx, cfg.OIDCIssuer, cfg.OIDCAudience, cfg.RolesClaim)
+	verifier, err := auth.NewOIDCVerifier(startupCtx, cfg.OIDCIssuer, cfg.OIDCDiscoveryURL, cfg.OIDCAudience, cfg.RolesClaim)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/192d-Wing/usg-itsm/pkg/auth"
@@ -40,7 +41,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	if cfg.AuthEnabled() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		verifier, err := auth.NewOIDCVerifier(ctx, cfg.OIDCIssuer, cfg.OIDCAudience, cfg.RolesClaim)
+		verifier, err := auth.NewOIDCVerifier(ctx, cfg.OIDCIssuer, cfg.OIDCDiscoveryURL, cfg.OIDCAudience, cfg.RolesClaim)
 		if err != nil {
 			return err
 		}
@@ -53,6 +54,12 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		}
 	} else {
 		logger.Warn("OIDC issuer not set; protected API routes are disabled (dev only)")
+	}
+
+	// Proxy Keycloak's browser-facing paths so the SPA, API, and auth all share
+	// the itsm.dev.mil origin. Mounted before the SPA so it isn't shadowed.
+	if err := mountKeycloak(app, cfg, logger); err != nil {
+		return err
 	}
 
 	// Serve the built SPA (with history-API fallback) when configured. Mounted
@@ -92,6 +99,55 @@ func mountUpstreams(r fiber.Router, cfg config.Config, logger *slog.Logger) erro
 	logger.Info("routing /api/v1/tickets -> ticketing",
 		"upstream", cfg.TicketingURL, "insecure_skip_verify", cfg.InternalCAFile == "" && cfg.IsDev())
 	return nil
+}
+
+// mountKeycloak proxies Keycloak's browser-facing paths so login happens on the
+// single itsm.dev.mil origin. /admin is intentionally not exposed.
+func mountKeycloak(app *fiber.App, cfg config.Config, logger *slog.Logger) error {
+	if cfg.KeycloakURL == "" {
+		return nil
+	}
+	if u, err := url.Parse(cfg.KeycloakURL); err != nil ||
+		(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid KEYCLOAK_URL %q: must be an http(s) URL", cfg.KeycloakURL)
+	}
+	clientTLS, err := tlsconf.Client(cfg.InternalCAFile, cfg.IsDev())
+	if err != nil {
+		return err
+	}
+	h := gw.KeycloakProxy(cfg.KeycloakURL, gw.NewUpstreamClient(clientTLS), gw.DefaultUpstreamTimeout)
+
+	// Scope realm endpoints to our realm so the Keycloak master realm (admin)
+	// login is never exposed publicly. /resources and /js are realm-agnostic
+	// static assets needed by the login pages.
+	realmPath := "/realms"
+	if realm := realmFromIssuer(cfg.OIDCIssuer); realm != "" {
+		realmPath = "/realms/" + realm
+	} else {
+		logger.Warn("could not derive realm from OIDC_ISSUER; proxying all /realms (dev)")
+	}
+	for _, p := range []string{realmPath, "/resources", "/js"} {
+		app.All(p, h)
+		app.All(p+"/*", h)
+	}
+	logger.Info("routing Keycloak auth paths -> keycloak", "upstream", cfg.KeycloakURL, "realmPath", realmPath)
+	return nil
+}
+
+// realmFromIssuer extracts the realm name from an OIDC issuer URL like
+// https://host/realms/<realm>.
+func realmFromIssuer(issuer string) string {
+	u, err := url.Parse(issuer)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i, p := range parts {
+		if p == "realms" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }
 
 // me returns the validated caller's claims.

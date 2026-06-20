@@ -16,11 +16,13 @@ import (
 )
 
 type echo struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-	Query  string `json:"query"`
-	Auth   string `json:"auth"`
-	Body   string `json:"body"`
+	Method   string `json:"method"`
+	Path     string `json:"path"`
+	Query    string `json:"query"`
+	Auth     string `json:"auth"`
+	Body     string `json:"body"`
+	FwdHost  string `json:"fwd_host"`
+	FwdProto string `json:"fwd_proto"`
 }
 
 // startBackend spins up a TLS 1.3 backend that echoes the request, returning its
@@ -39,15 +41,18 @@ func startBackend(t *testing.T) string {
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	handler := func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusCreated).JSON(echo{
-			Method: c.Method(),
-			Path:   c.Path(),
-			Query:  string(c.Request().URI().QueryString()),
-			Auth:   c.Get(fiber.HeaderAuthorization),
-			Body:   string(c.Body()),
+			Method:   c.Method(),
+			Path:     c.Path(),
+			Query:    string(c.Request().URI().QueryString()),
+			Auth:     c.Get(fiber.HeaderAuthorization),
+			Body:     string(c.Body()),
+			FwdHost:  c.Get("X-Forwarded-Host"),
+			FwdProto: c.Get("X-Forwarded-Proto"),
 		})
 	}
 	app.All("/api/v1/tickets", handler)
 	app.All("/api/v1/tickets/*", handler)
+	app.All("/realms/*", handler)
 
 	go func() { _ = app.Listener(ln) }()
 	t.Cleanup(func() { _ = app.Shutdown() })
@@ -82,6 +87,34 @@ func frontApp(upstream string) *fiber.App {
 	app.All("/api/v1/tickets", h)
 	app.All("/api/v1/tickets/*", h)
 	return app
+}
+
+func TestKeycloakProxy_PreservesHostAndForwards(t *testing.T) {
+	upstream := startBackend(t)
+	clientTLS, _ := tlsconf.Client("", true)
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app.All("/realms/*", gw.KeycloakProxy(upstream, gw.NewUpstreamClient(clientTLS), 5*time.Second))
+
+	req := httptest.NewRequest(fiber.MethodGet, "/realms/usg-itsm/test", nil)
+	req.Host = "itsm.dev.mil"
+	resp, err := app.Test(req, 5000)
+	if err != nil {
+		t.Fatalf("test: %v", err)
+	}
+	var got echo
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode echo: %v (%s)", err, body)
+	}
+	if got.FwdHost != "itsm.dev.mil" {
+		t.Errorf("x-forwarded-host = %q, want itsm.dev.mil", got.FwdHost)
+	}
+	if got.FwdProto != "https" {
+		t.Errorf("x-forwarded-proto = %q, want https", got.FwdProto)
+	}
+	if got.Path != "/realms/usg-itsm/test" {
+		t.Errorf("path = %q", got.Path)
+	}
 }
 
 func TestProxy_ForwardsRequest(t *testing.T) {
