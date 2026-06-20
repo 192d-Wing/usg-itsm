@@ -26,10 +26,13 @@ spec:
                   key: KEYCLOAK_ADMIN_PASSWORD
             - name: KC_HTTP_PORT
               value: "8080"
-            # iss in issued tokens must match OIDC_ISSUER. Set the public
-            # hostname so tokens carry https://itsm.dev.mil/realms/...
+            # iss in the discovery doc and issued tokens must match OIDC_ISSUER.
+            # For this first bring-up that is the in-cluster URL; switch to
+            # https://itsm.dev.mil once the gateway proxies Keycloak.
             - name: KC_HOSTNAME
-              value: "https://itsm.dev.mil"
+              value: "http://keycloak:8080"
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
             - name: KC_HTTP_ENABLED

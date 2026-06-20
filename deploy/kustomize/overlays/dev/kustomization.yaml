@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - ../../base
   - ip-pool.yaml
+  - bgp-advertisement.yaml
 
 patches:
   - path: gateway-lb.yaml
