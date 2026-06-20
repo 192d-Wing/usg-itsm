@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ip-pool.yaml
+  - bgp-advertisement.yaml
+
+patches:
+  - path: gateway-lb.yaml
+    target:
+      kind: Service
+      name: gateway
+
+# Images published by the publish-images workflow (multi-arch amd64+arm64).
+# For a fully air-gapped cluster, mirror these into Harbor and repoint here.
+images:
+  - name: usg-itsm/gateway
+    newName: ghcr.io/192d-wing/usg-itsm/gateway
+    newTag: latest
+  - name: usg-itsm/identity
+    newName: ghcr.io/192d-wing/usg-itsm/identity
+    newTag: latest
+  - name: usg-itsm/ticketing
+    newName: ghcr.io/192d-wing/usg-itsm/ticketing
+    newTag: latest
+  - name: usg-itsm/notification
+    newName: ghcr.io/192d-wing/usg-itsm/notification
+    newTag: latest

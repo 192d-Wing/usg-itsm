@@ -1,0 +1,22 @@
+# BGP advertisement so the gateway's anycast VIPs (10.10.10.60 +
+# 2601:443:c200:575::60) are announced to the upstream routers. The
+# `advertise: k3s-pod-cidrs` label is how the cluster's CiliumBGPPeerConfig
+# (upstream-k3s-v4/v6) selects advertisements; the selector picks the gateway.
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: itsm-loadbalancer
+  labels:
+    advertise: k3s-pod-cidrs
+spec:
+  advertisements:
+    - advertisementType: Service
+      # Matches the gateway Service (the only LoadBalancer in the namespace);
+      # ClusterIP services carry the same label but have no LoadBalancerIP to
+      # advertise.
+      selector:
+        matchLabels:
+          app.kubernetes.io/part-of: usg-itsm
+      service:
+        addresses:
+          - LoadBalancerIP
